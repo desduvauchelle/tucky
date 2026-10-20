@@ -157,7 +157,9 @@ mod tests {
     #[test]
     fn document_path_preserves_workspace_and_document() {
         let mut signals = vec![];
-        url_signals("file:///Users/test/code/livecase/src/app.ts", &mut signals);
+        let document = std::env::temp_dir().join("code").join("livecase").join("src").join("app.ts");
+        let document_url = url::Url::from_file_path(document).expect("native absolute file URL");
+        url_signals(document_url.as_str(), &mut signals);
         assert!(signals
             .iter()
             .any(|s| s.kind == ContextKind::Workspace && s.value == "livecase"));

@@ -111,9 +111,10 @@ jobs:
 
       - name: Build and verify Apple-notarized app and DMG
         env:
-          # Keep the existing public speech-model catalog.
-          TUCKY_LOCAL_ASR: "0"
-          VITE_LOCAL_ASR: "0"
+          # Preserve the catalog in the first notarized public DMG (1.0.27),
+          # matching release-macos.sh and reinstall.command defaults.
+          TUCKY_LOCAL_ASR: "1"
+          VITE_LOCAL_ASR: "1"
         run: bun run release:mac
 
       - name: Verify MCP lifecycle and legacy executable path
