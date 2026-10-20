@@ -7,7 +7,7 @@ from pathlib import Path
 import subprocess
 
 release = json.loads(subprocess.check_output(['gh', 'api',
-    f'repos/{os.environ["GITHUB_REPOSITORY"]}/releases/tags/{os.environ["RELEASE_TAG"]}'], text=True))
+    f'repos/{os.environ["GITHUB_REPOSITORY"]}/releases/{os.environ["RELEASE_ID"]}'], text=True))
 assets = {asset['name']: asset for asset in release['assets']}
 expected = {}
 for line in Path('SHA256SUMS.txt').read_text().splitlines():

@@ -168,6 +168,7 @@ jobs:
           merge-multiple: true
 
       - name: Upload verified assets to a draft release
+        id: draft_release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
@@ -182,6 +183,8 @@ jobs:
             SHA256SUMS.txt
 
       - name: Verify every draft asset before publishing
+        env:
+          RELEASE_ID: ${{ steps.draft_release.outputs.id }}
         run: python3 scripts/verify-release-assets.py
 
       - name: Publish complete verified release
