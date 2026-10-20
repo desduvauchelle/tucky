@@ -11,7 +11,7 @@ test("wake request visibly listens beside the pet and in the standalone fallback
   }).toContain("I’m listening…");
   await page.evaluate(() => (window as any).__MOCK_EMIT__("mic-level", [0.8, 0.6, 0.9, 0.7, 0.5]));
   await expect(page.locator(".activity-mic-meter i")).toHaveCount(5);
-  expect(await page.locator(".activity-mic-meter i").first().evaluate(el => el.getBoundingClientRect().height)).toBeGreaterThan(4);
+  await expect.poll(() => page.locator(".activity-mic-meter i").first().evaluate(el => el.getBoundingClientRect().height)).toBeGreaterThan(4);
   await page.getByRole("button", { name: "Cancel recording" }).click();
   expect((await recordedCalls(page)).some(call => call.cmd === "plugin:event|emit" && call.args?.event === "overlay-cancel")).toBe(true);
   await expectPaintRoom(page, ".activity-bubble");
@@ -34,6 +34,11 @@ test("wake request visibly listens beside the pet and in the standalone fallback
 
 // Exercise the real cards at their native window sizes, including auto-resize.
 async function expectPaintRoom(page: Page, selector: string) {
+  // Opacity finishes before the spring-like transform; measuring during
+  // its overshoot can temporarily put the card outside the final insets.
+  await expect.poll(() => page.locator(selector).evaluate(el =>
+    el.getAnimations().filter(animation => animation.playState === "running").length,
+  )).toBe(0);
   const box = (await page.locator(selector).boundingBox())!;
   const viewport = page.viewportSize()!;
   expect(box.x).toBeGreaterThanOrEqual(32);

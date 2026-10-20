@@ -2925,10 +2925,10 @@ fn chrono_today_for_filename() -> String {
 
 /// Applies the staged update by writing a helper shell script, launching it
 /// detached, then exiting the process. The helper swaps the .app bundle while
-/// the process is gone, strips quarantine, and relaunches the app.
+/// the process is gone, retains a rollback copy, and verifies the new launch.
 #[tauri::command]
-pub fn apply_update_and_restart() {
-    crate::updater::launch_update_helper();
+pub fn apply_update_and_restart() -> Result<(), String> {
+    crate::updater::launch_update_helper()
 }
 
 /// The installed app version (e.g. "0.4.1"), for display in Settings.

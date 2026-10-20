@@ -15,6 +15,27 @@ WORKFLOW = json.loads(subprocess.check_output(
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_local_setup_never_accesses_github_or_prints_password(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'scripts').mkdir()
+            helper = root / 'scripts/configure-apple-notarization.command'
+            shutil.copyfile(ROOT / 'scripts/configure-apple-notarization.command', helper)
+            shell = '''
+gh() { echo 'UNEXPECTED_GITHUB_ACCESS' >&2; return 99; }
+xcrun() { return 0; }
+export -f gh xcrun
+bash "$1" --local-only
+'''
+            result = subprocess.run(['bash', '-c', shell, 'test', str(helper)],
+                env=dict(os.environ, TUCKY_APPLE_ID='test@example.com'),
+                input='fixture-secret-password\n\n', text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn('UNEXPECTED_GITHUB_ACCESS', result.stdout + result.stderr)
+            self.assertNotIn('fixture-secret-password', result.stdout + result.stderr)
+            self.assertEqual((root / 'output/apple-signing/notarization-setup.status').read_text().strip(),
+                             'complete')
+
     def test_setup_records_success_and_apple_failure_without_password(self):
         for apple_status, expected in [(0, 'complete'), (12, 'stopped:validating_with_apple:exit=12')]:
             with tempfile.TemporaryDirectory() as directory:
@@ -78,9 +99,11 @@ bash "$1"
     def test_publish_requires_verified_build_and_all_artifacts(self):
         build = WORKFLOW['jobs']['build']['steps']
         release = WORKFLOW['jobs']['release']
-        self.assertEqual(release['needs'], 'build')
-        publish = next(step for step in release['steps'] if step.get('name') == 'Publish GitHub Release')
+        self.assertEqual(set(release['needs']), {'prepare', 'build'})
+        publish = next(step for step in release['steps'] if step.get('name') == 'Upload verified assets to a draft release')
         self.assertTrue(publish['with']['fail_on_unmatched_files'])
+        self.assertTrue(publish['with']['draft'])
+        self.assertEqual(WORKFLOW['on']['push']['branches'], ['main'])
         self.assertIn('Tucky-*.dmg', publish['with']['files'])
         self.assertIn('EchoScribe-*.tar.gz', publish['with']['files'])
         self.assertTrue(any(step.get('run') == 'bun run release:mac' for step in build))

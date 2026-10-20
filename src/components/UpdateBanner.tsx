@@ -4,6 +4,7 @@ import { ArrowDownToLine, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { applyUpdateAndRestart, dismissUpdate } from "../lib/api";
 import { useCapabilities } from "../lib/capabilitiesContext";
+import { useToasts } from "./ToastProvider";
 import { uiGates } from "../lib/capabilities";
 
 type UpdateInfo = {
@@ -23,6 +24,7 @@ type Props = {
 export default function UpdateBanner({ variant = "floating" }: Props) {
   const { t } = useTranslation();
   const caps = useCapabilities();
+  const toasts = useToasts();
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
 
   useEffect(() => {
@@ -45,7 +47,11 @@ export default function UpdateBanner({ variant = "floating" }: Props) {
   if (!updateVersion) return null;
 
   const handleRestart = async () => {
-    await applyUpdateAndRestart();
+    try {
+      await applyUpdateAndRestart();
+    } catch (error) {
+      toasts.push({ tone: "error", message: typeof error === "string" ? error : "Could not install the update. Your current app has been kept." });
+    }
   };
 
   const handleDismiss = async () => {

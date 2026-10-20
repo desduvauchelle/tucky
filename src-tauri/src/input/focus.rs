@@ -109,6 +109,11 @@ impl FocusElement {
     pub fn replace_selected_text(&self, _text: &str) -> i32 {
         -1
     }
+    pub fn insert_text_verified(&self, _text: &str) -> InsertOutcome {
+        // Direct AX insertion is macOS-only. Preserve the caller's
+        // clipboard/paste fallback on other platforms.
+        InsertOutcome::Refuted
+    }
 }
 
 /// How a text selection was captured.

@@ -31,6 +31,7 @@ mkdir -p "$SMOKE_HOME"
 
 APP_BIN="$INSTALL_DIR/Tucky.app/Contents/MacOS/Tucky"
 LOG_DIR="$SMOKE_HOME/Library/Logs/Tucky"
+APP_OUTPUT="$WORK_DIR/app-output.log"
 
 cleanup() {
   if [[ -n "${APP_PID:-}" ]] && kill -0 "$APP_PID" 2>/dev/null; then
@@ -53,7 +54,7 @@ if [[ ! -x "$APP_BIN" ]]; then
 fi
 
 echo "==> Launching installed app in smoke mode (timeout ${TIMEOUT_SECS}s)"
-HOME="$SMOKE_HOME" ECHO_SCRIBE_SMOKE=1 "$APP_BIN" &
+HOME="$SMOKE_HOME" ECHO_SCRIBE_SMOKE=1 "$APP_BIN" > "$APP_OUTPUT" 2>&1 &
 APP_PID=$!
 
 STATUS=""
@@ -66,6 +67,7 @@ for ((i = 0; i < TIMEOUT_SECS; i++)); do
 done
 
 dump_logs() {
+  cat "$APP_OUTPUT"
   echo "==> App log (last 200 lines):"
   if compgen -G "$LOG_DIR/tucky.log*" >/dev/null; then
     tail -n 200 "$LOG_DIR"/tucky.log* || true
@@ -86,4 +88,12 @@ if [[ "$STATUS" -ne 0 ]]; then
   exit 1
 fi
 
+# A second launch can exit zero after deferring to an existing instance.
+# Only the real frontend checkpoint proves this bundle rendered a view.
+if ! grep -Eq '^SMOKE OK view=.+$' "$APP_OUTPUT"; then
+  echo "SMOKE FAIL: app exited without the frontend checkpoint (another instance may be running)." >&2
+  dump_logs
+  exit 1
+fi
+cat "$APP_OUTPUT"
 echo "Install + first-launch smoke test passed."

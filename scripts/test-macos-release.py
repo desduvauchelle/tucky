@@ -55,6 +55,10 @@ class ReleaseGateTests(unittest.TestCase):
             (root / 'src-tauri/tauri.conf.json').write_text('{}')
             for script in ['release-macos.sh', 'sign-macos-bundle.sh', 'package-release.sh']:
                 shutil.copyfile(ROOT / 'scripts' / script, root / 'scripts' / script)
+            # Finder layout is exercised on a real mounted image separately.
+            # Keep these orchestration checks independent of the GUI session.
+            (root / 'scripts/create-macos-dmg.sh').write_text(
+                '#!/bin/bash\nset -eu\nhdiutil create "$2"\n')
             binaries = root / 'bin'
             binaries.mkdir()
             for command in ['security', 'bun', 'xcrun', 'codesign', 'ditto', 'hdiutil', 'spctl']:
@@ -107,6 +111,9 @@ class ReleaseGateTests(unittest.TestCase):
         self.assertIn('Tucky-aarch64.tar.gz', outputs)
         self.assertIn('EchoScribe-aarch64.tar.gz', outputs)
         self.assertTrue(any(name.startswith('Tucky-1.2.3-') and name.endswith('.dmg') for name in outputs))
+        arch = subprocess.check_output(['uname', '-m'], text=True).strip()
+        self.assertIn(f'Tucky-{arch}.dmg', outputs)
+        self.assertIn('SHA256SUMS.txt', outputs)
 
 
 if __name__ == '__main__':
