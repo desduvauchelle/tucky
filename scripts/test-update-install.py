@@ -25,6 +25,7 @@ class UpdateInstallTests(unittest.TestCase):
                 binary.parent.mkdir(parents=True)
                 binary.write_text('''#!/bin/bash
 if [[ "${TEST_FAILURE:-}" == launch ]]; then exit 1; fi
+if [[ "${TEST_FAILURE:-}" == no_checkpoint ]]; then exit 0; fi
 printf '1.0.28\\n' > "$TEST_STAGE/health-$TUCKY_UPDATE_HEALTH_TOKEN"
 ''')
                 binary.chmod(0o755)
@@ -89,7 +90,7 @@ elif name == 'mv':
                 self.assertEqual(version,'1.0.27')
 
     def test_copy_and_swap_failures_restore_old_app(self):
-        for failure in ['copy','swap','launch']:
+        for failure in ['copy','swap','launch','no_checkpoint']:
             with self.subTest(failure=failure):
                 result,version,_,calls=self.run_update(failure)
                 self.assertNotEqual(result.returncode,0)

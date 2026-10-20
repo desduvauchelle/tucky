@@ -187,8 +187,11 @@ mod tests {
     use super::*;
     #[test]
     fn lab_registry_does_not_change_dictation_models() {
+        let dictation_ids: Vec<_> = registry::registry().iter().map(|model| model.id.clone()).collect();
         assert_eq!(entries().len(), 3);
-        assert!(registry::lookup("whisper-turbo").is_none());
+        // Debug dictation now intentionally includes Whisper Turbo. The lab
+        // must leave that existing catalog unchanged, not assume its absence.
+        assert_eq!(registry::registry().iter().map(|model| model.id.clone()).collect::<Vec<_>>(), dictation_ids);
         assert!(entry("../arbitrary").is_err());
         for model in entries() {
             assert_eq!(
