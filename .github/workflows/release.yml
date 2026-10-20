@@ -2,6 +2,8 @@ name: Release
 
 on:
   push:
+    branches: [main]
+    paths: [package.json]
     tags:
       - 'v*.*.*'
   workflow_dispatch:
@@ -12,13 +14,35 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
-env:
-  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+concurrency:
+  group: tucky-macos-release
+  cancel-in-progress: false
 
 jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      commit: ${{ steps.release.outputs.commit }}
+      should_release: ${{ steps.release.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.sha }}
+      - name: Resolve version and preserve published releases
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: python3 scripts/prepare-release.py
+
   build:
+    needs: prepare
+    if: needs.prepare.outputs.should_release == 'true'
+    env:
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
     # Apple Silicon only. GitHub's Intel (macos-13) runners are being wound
     # down and repeatedly hung "awaiting a runner", freezing the whole release
     # (the publish job needs this build). Tucky ships aarch64-only.
@@ -28,7 +52,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ needs.prepare.outputs.commit }}
 
       - name: Configure Apple signing and notarization
         env:
@@ -114,21 +138,31 @@ jobs:
           rm -f "$RUNNER_TEMP/tucky-signing.p12"
 
   release:
-    needs: build
-    runs-on: ubuntu-latest
+    needs: [prepare, build]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      GH_TOKEN: ${{ github.token }}
     timeout-minutes: 15
 
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
       - name: Download release assets
         uses: actions/download-artifact@v4
         with:
           pattern: release-*
           merge-multiple: true
 
-      - name: Publish GitHub Release
+      - name: Upload verified assets to a draft release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ needs.prepare.outputs.commit }}
+          draft: true
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
@@ -136,6 +170,12 @@ jobs:
             EchoScribe-*.tar.gz
             Tucky-*.dmg
             SHA256SUMS.txt
+
+      - name: Verify every draft asset before publishing
+        run: python3 scripts/verify-release-assets.py
+
+      - name: Publish complete verified release
+        run: gh release edit "$RELEASE_TAG" --draft=false --latest
 
       - name: Verify published assets
         run: |

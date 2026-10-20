@@ -10,9 +10,16 @@ test("clickable controls show a pointer while editing and dragging retain their 
     projectCount: 3,
   });
   await page.goto("/");
+  // Focus now arrives through the assistant; seed the real backend route
+  // before exercising the board's existing add/edit controls.
+  await page.evaluate(async () => {
+    await (window as any).__TAURI_INTERNALS__.invoke("add_focus_task", {
+      projectId: "project-1", content: "Existing focus task",
+    });
+    (window as any).__MOCK_EMIT__("focus:changed", null);
+  });
   const board = page.locator(".echo-focus-board");
-  await board.getByRole("button", { name: /No focus set yet/ }).click();
-  await page.getByRole("menuitem", { name: "Project 1", exact: true }).click();
+  await board.getByRole("button", { name: "Add item to Project 1" }).click();
   const input = board.locator("input");
   await expect(input).toHaveCSS("cursor", "text");
   await input.fill("Check cursor behavior");
@@ -25,7 +32,7 @@ test("clickable controls show a pointer while editing and dragging retain their 
   await add.hover();
   await expect(add).toHaveCSS("cursor", "pointer");
   await expect(add.locator("svg")).toHaveCSS("cursor", "pointer");
-  await expect(board.getByRole("button", { name: /Drag to reorder/ })).toHaveCSS("cursor", "grab");
+  await expect(board.locator("[data-focus-row]", { hasText: "Check cursor behavior" }).getByRole("button", { name: /Drag to reorder/ })).toHaveCSS("cursor", "grab");
   const failures = await page.locator('button:enabled:not([aria-disabled="true"]):not([class*="cursor-"])').evaluateAll(
     els => els.filter(el => el.getBoundingClientRect().width > 0 && getComputedStyle(el).cursor !== "pointer")
       .map(el => el.getAttribute("aria-label") || el.textContent?.trim()),

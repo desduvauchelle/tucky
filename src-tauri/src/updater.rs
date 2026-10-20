@@ -8,6 +8,10 @@ use crate::commands::AppState;
 
 const REPO: &str = "desduvauchelle/tucky";
 const APP_EXECUTABLE: &str = "echo-scribe";
+#[cfg(target_os = "macos")]
+const INSTALL_SCRIPT: &str = include_str!("update-install.sh");
+static DOWNLOAD_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 const CHECK_INTERVAL_SECS: u64 = 24 * 60 * 60;
 const MIN_CHECK_INTERVAL_SECS: i64 = 60 * 60;
 
@@ -72,6 +76,7 @@ async fn fetch_latest_version() -> Option<String> {
 }
 
 async fn download_and_stage(version: &str) -> bool {
+    let _download_guard = DOWNLOAD_LOCK.lock().await;
     let arch = if std::env::consts::ARCH == "aarch64" {
         "aarch64"
     } else {
@@ -93,6 +98,13 @@ async fn download_and_stage(version: &str) -> bool {
         return false;
     }
 
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if std::fs::set_permissions(&staging_dir, std::fs::Permissions::from_mode(0o700)).is_err() {
+            return false;
+        }
+    }
     let archive_path = staging_dir.join(&filename);
 
     let client = match reqwest::Client::builder()
@@ -131,6 +143,17 @@ async fn download_and_stage(version: &str) -> bool {
         return false;
     }
 
+    let listing = std::process::Command::new("tar").arg("-tzf").arg(&archive_path).output();
+    if !listing.is_ok_and(|out| out.status.success() &&
+        String::from_utf8(out.stdout).is_ok_and(|names| names.lines().all(|name|
+            (name == "Tucky.app" || name.starts_with("Tucky.app/")) &&
+            !name.split('/').any(|part| part == "..")))) {
+        warn!("update archive contains invalid paths");
+        let _ = std::fs::remove_file(&archive_path);
+        return false;
+    }
+    let prior_app = staging_dir.join("Tucky.app");
+    if prior_app.exists() && std::fs::remove_dir_all(&prior_app).is_err() { return false; }
     let extract = std::process::Command::new("tar")
         .args([
             "-xzf",
@@ -170,7 +193,41 @@ async fn download_and_stage(version: &str) -> bool {
         return false;
     }
 
+    if !verify_update(&app_path, version) {
+        warn!("staged update failed signature, notarization, or version validation");
+        let _ = std::fs::remove_dir_all(&staging_dir);
+        return false;
+    }
     true
+}
+
+#[cfg(target_os = "macos")]
+fn verify_update(path: &std::path::Path, version: &str) -> bool {
+    std::process::Command::new("/bin/bash")
+        .args(["-c", INSTALL_SCRIPT, "tucky-update", "--verify"])
+        .arg(path).arg(version)
+        .env("PATH", "/usr/bin:/bin:/usr/sbin:/sbin")
+        .status().is_ok_and(|status| status.success())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn verify_update(_path: &std::path::Path, _version: &str) -> bool { false }
+
+/// Acknowledge only after the real frontend and packaged sidecars are ready.
+/// The token selects a file in our own pending-update directory, never an
+/// arbitrary caller-provided path. It is consumed once per process.
+pub fn confirm_update_launch() {
+    static CONFIRMED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    let Ok(token) = std::env::var("TUCKY_UPDATE_HEALTH_TOKEN") else { return; };
+    if token.is_empty() || token.len() > 80 || !token.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-') {
+        return;
+    }
+    if CONFIRMED.swap(true, std::sync::atomic::Ordering::SeqCst) { return; }
+    if let Some(staging) = staging_app_path().and_then(|p| p.parent().map(std::path::Path::to_path_buf)) {
+        if let Err(error) = std::fs::write(staging.join(format!("health-{token}")), env!("CARGO_PKG_VERSION")) {
+            warn!(%error, "could not acknowledge update launch");
+        }
+    }
 }
 
 /// Path of the `.app` bundle containing the running executable, if any.
@@ -185,6 +242,11 @@ fn current_bundle_path() -> Option<PathBuf> {
 /// to a file themselves). Returns true when the helper was spawned.
 #[cfg(target_os = "macos")]
 fn spawn_detached_script(script_path: &std::path::Path, script: &str, what: &str) -> bool {
+    spawn_detached_script_with_args(script_path, script, what, &[])
+}
+
+#[cfg(target_os = "macos")]
+fn spawn_detached_script_with_args(script_path: &std::path::Path, script: &str, what: &str, args: &[std::ffi::OsString]) -> bool {
     if let Err(e) = std::fs::write(script_path, script) {
         error!(error = %e, what, "failed to write helper script");
         return false;
@@ -192,7 +254,8 @@ fn spawn_detached_script(script_path: &std::path::Path, script: &str, what: &str
     use std::os::unix::fs::PermissionsExt;
     let _ = std::fs::set_permissions(script_path, std::fs::Permissions::from_mode(0o755));
     match std::process::Command::new("nohup")
-        .args(["bash", script_path.to_str().unwrap_or("")])
+        .arg("/bin/bash").arg(script_path).args(args)
+        .env("PATH", "/usr/bin:/bin:/usr/sbin:/sbin")
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -246,8 +309,8 @@ pub fn spawn_relauncher() -> bool {
 }
 
 /// Write a helper shell script, launch it detached, then exit the process.
-/// The script waits for the app to exit, replaces the bundle, strips quarantine,
-/// relaunches, and self-deletes.
+/// The helper verifies the candidate, waits for the old process, retains a
+/// backup, and rolls back unless the new frontend acknowledges a healthy launch.
 #[cfg(target_os = "macos")]
 pub fn launch_update_helper() {
     // The helper script replaces /Applications/Tucky.app in place. An
@@ -265,46 +328,30 @@ pub fn launch_update_helper() {
         }
     };
 
-    let staging_dir = match staging.parent() {
-        Some(p) => p.to_string_lossy().to_string(),
-        None => {
-            error!("could not determine staging dir parent");
-            return;
-        }
+    let version = std::process::Command::new("/usr/libexec/PlistBuddy")
+        .args(["-c", "Print :CFBundleShortVersionString"])
+        .arg(staging.join("Contents/Info.plist")).output()
+        .ok().filter(|out| out.status.success())
+        .and_then(|out| String::from_utf8(out.stdout).ok())
+        .map(|v| v.trim().to_string());
+    let Some(version) = version.filter(|v| is_newer(env!("CARGO_PKG_VERSION"), v)) else {
+        error!("staged update is not a newer valid version");
+        return;
     };
-
-    // Replace the bundle we're actually running from; /Applications/Echo
-    // Scribe.app is only the conventional install location.
-    let target = current_bundle_path().unwrap_or_else(|| PathBuf::from("/Applications/Tucky.app"));
-    let pid = std::process::id();
-    let log = crate::log_dir().join("update-helper.log");
-    let script_path = std::env::temp_dir().join(format!("tucky-update-{pid}.sh"));
-
-    // The old script slept a fixed 2s and then called `open`. If the app took
-    // longer than that to exit, `open` merely activated the dying instance —
-    // and once it finished quitting, nothing relaunched ("update → the app
-    // never came back"). Wait for the pid instead, and log every step.
-    let script = format!(
-        "#!/bin/bash\n\
-         exec >>\"{log}\" 2>&1\n\
-         echo \"[$(date)] update helper: waiting for pid {pid} to exit\"\n\
-         for _ in $(seq 1 240); do kill -0 {pid} 2>/dev/null || break; sleep 0.5; done\n\
-         if kill -0 {pid} 2>/dev/null; then echo \"pid {pid} never exited; aborting update\"; rm -- \"$0\"; exit 1; fi\n\
-         echo \"[$(date)] swapping {target}\"\n\
-         rm -rf \"{target}\"\n\
-         cp -R \"{staged}\" \"{target}\"\n\
-         xattr -dr com.apple.quarantine \"{target}\" 2>/dev/null || true\n\
-         rm -rf \"{staging_dir}\"\n\
-         echo \"[$(date)] relaunching {target}\"\n\
-         open \"{target}\"\n\
-         rm -- \"$0\"\n",
-        log = log.display(),
-        target = target.display(),
-        staged = staging.display(),
-        staging_dir = staging_dir,
-    );
-
-    if !spawn_detached_script(&script_path, &script, "update") {
+    if !verify_update(&staging, &version) {
+        error!("refusing to install an unverified update");
+        return;
+    }
+    let Some(target) = current_bundle_path() else {
+        error!("refusing self-update outside an app bundle");
+        return;
+    };
+    let token = uuid::Uuid::new_v4().to_string();
+    let script_path = std::env::temp_dir().join(format!("tucky-update-{token}.sh"));
+    let args = vec![target.into_os_string(), staging.into_os_string(),
+        std::process::id().to_string().into(), version.into(), token.into(),
+        crate::log_dir().join("update-helper.log").into_os_string()];
+    if !spawn_detached_script_with_args(&script_path, INSTALL_SCRIPT, "update", &args) {
         return;
     }
 

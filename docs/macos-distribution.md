@@ -93,10 +93,19 @@ login keychain. GitHub runners cannot use this Mac's local Keychain profile.
 No secret is optional: missing credentials stop the workflow rather than
 falling back to an unnotarized public release.
 
-The workflow still runs on version tags or an explicit workflow dispatch.
+The release workflow runs when a `package.json` version bump reaches `main`,
+on a version tag, or on an explicit workflow dispatch. Bump `package.json`,
+`src-tauri/Cargo.toml`, and the package entry in `src-tauri/Cargo.lock`, commit,
+and push or merge to `main`. GitHub resolves the exact commit, skips already
+published versions, and serializes releases. After signing, notarization, MCP,
+and real first-launch checks, assets are uploaded to a draft. All uploaded
+SHA-256 values must match before the release becomes public/latest. A failed
+run leaves the previous public release available; a draft can be retried.
+
+The local pre-push hook no longer creates tags before `main` is pushed.
 Tags must include the new workflow and release scripts. Selecting an older
-tag builds that tag's old workflow. This setup does not push local changes,
-create a tag, run CI, or publish an existing local build automatically.
+tag builds that tag's old workflow. A local `bun run release:mac` does not push source or publish its output;
+GitHub builds its own verified artifacts from the selected commit.
 
 ## User updates and verification limits
 
@@ -106,11 +115,18 @@ Tucky menu and Settings. A newer version is downloaded from
 `Tucky-aarch64.tar.gz`; the user clicks **Restart now** to apply it.
 Keep both updater archive names on every release for older installations.
 
-The custom updater currently checks the extracted app and executable exist,
-but does not validate the Developer ID/team before installation. Its helper
-removes the old bundle before copying the replacement and has no rollback
-copy. Those are separate updater-hardening gaps; notarizing a release does
-not repair them. Users can instead quit Tucky and replace it from the DMG.
+Starting with 1.0.28, the updater validates the complete code signature,
+Tucky's bundle identifier, the pinned Developer ID team `BSH2UEDLU5`, the
+Developer ID certificate type, Gatekeeper acceptance, and the expected version.
+It repeats validation after copying the candidate to the destination filesystem.
+Quarantine is retained.
+
+The helper moves the previous app to a sibling `Tucky.app.update-backup-<token>`
+backup, then renames the verified candidate into place. The new process must
+report a rendered frontend with all four sidecars present within 90 seconds.
+On copy, swap, launch, or health-check failure, the helper restores and reopens
+the previous app. Successful updates retain the backup for manual recovery.
+Older releases use their original updater until upgraded to 1.0.28 or later.
 
 The launch smoke check requires the actual `SMOKE OK view=...` frontend
 checkpoint. A zero exit alone can mean a second launch handed control to an

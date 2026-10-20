@@ -99,9 +99,11 @@ bash "$1"
     def test_publish_requires_verified_build_and_all_artifacts(self):
         build = WORKFLOW['jobs']['build']['steps']
         release = WORKFLOW['jobs']['release']
-        self.assertEqual(release['needs'], 'build')
-        publish = next(step for step in release['steps'] if step.get('name') == 'Publish GitHub Release')
+        self.assertEqual(set(release['needs']), {'prepare', 'build'})
+        publish = next(step for step in release['steps'] if step.get('name') == 'Upload verified assets to a draft release')
         self.assertTrue(publish['with']['fail_on_unmatched_files'])
+        self.assertTrue(publish['with']['draft'])
+        self.assertEqual(WORKFLOW['on']['push']['branches'], ['main'])
         self.assertIn('Tucky-*.dmg', publish['with']['files'])
         self.assertIn('EchoScribe-*.tar.gz', publish['with']['files'])
         self.assertTrue(any(step.get('run') == 'bun run release:mac' for step in build))

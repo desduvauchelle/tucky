@@ -267,10 +267,13 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_notification::init())
         // The installer migrates existing login items, preserving their options.
-        .plugin(tauri_plugin_autostart::Builder::new()
-            .app_name(if is_primary_install() { "Tucky" } else { data_folder_name() })
-            .macos_launcher(tauri_plugin_autostart::MacosLauncher::LaunchAgent)
-            .build())
+        .plugin({
+            let builder = tauri_plugin_autostart::Builder::new()
+                .app_name(if is_primary_install() { "Tucky" } else { data_folder_name() });
+            #[cfg(target_os = "macos")]
+            let builder = builder.macos_launcher(tauri_plugin_autostart::MacosLauncher::LaunchAgent);
+            builder.build()
+        })
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             asr_lab::asr_lab_status,

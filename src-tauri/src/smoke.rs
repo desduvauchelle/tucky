@@ -45,7 +45,7 @@ pub fn arm_watchdog() {
 
 /// Sidecars that must ship inside the bundle, next to the main binary.
 /// Keep in sync with `bundle.externalBin` in tauri.conf.json.
-const SIDECARS: [&str; 3] = ["echo-scribe-syscap", "echo-scribe-screenrec", "tucky-wakeword"];
+const SIDECARS: [&str; 4] = ["echo-scribe-syscap", "echo-scribe-screenrec", "tucky-wakeword", "tucky-whisper"];
 
 fn missing_sidecars() -> Vec<String> {
     let exe_dir = match std::env::current_exe()
@@ -83,16 +83,22 @@ fn missing_sidecars() -> Vec<String> {
 /// the "checking" state; a no-op unless smoke mode is on.
 #[tauri::command]
 pub fn smoke_checkpoint(view: String) -> Result<(), String> {
-    if !enabled() {
+    let updating = std::env::var_os("TUCKY_UPDATE_HEALTH_TOKEN").is_some();
+    if !enabled() && !updating {
         return Ok(());
     }
     let missing = missing_sidecars();
     if !missing.is_empty() {
         error!(target: "smoke", ?missing, "SMOKE FAIL: sidecar binaries missing from bundle");
         eprintln!("SMOKE FAIL: sidecar binaries missing or not executable: {missing:?}");
-        std::thread::sleep(std::time::Duration::from_millis(LOG_FLUSH_MS));
-        std::process::exit(1);
+        if enabled() {
+            std::thread::sleep(std::time::Duration::from_millis(LOG_FLUSH_MS));
+            std::process::exit(1);
+        }
+        return Err("Packaged sidecars are missing; update launch is not healthy.".into());
     }
+    crate::updater::confirm_update_launch();
+    if !enabled() { return Ok(()); }
     info!(target: "smoke", %view, "SMOKE OK: frontend rendered and sidecars present");
     println!("SMOKE OK view={view}");
     std::thread::sleep(std::time::Duration::from_millis(LOG_FLUSH_MS));
