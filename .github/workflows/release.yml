@@ -10,8 +10,13 @@ on:
     inputs:
       tag:
         description: Existing version tag to build and publish, for example v0.1.1
-        required: true
+        required: false
         type: string
+      verify_only:
+        description: Build and notarize artifacts without publishing a release
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -139,6 +144,7 @@ jobs:
 
   release:
     needs: [prepare, build]
+    if: github.event_name != 'workflow_dispatch' || !inputs.verify_only
     runs-on: ubuntu-24.04
     permissions:
       contents: write
