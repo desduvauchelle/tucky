@@ -21,13 +21,14 @@ class AutomationTests(unittest.TestCase):
                     {'name':'SHA256SUMS.txt','digest':'sha256:'+hashlib.sha256((root/'SHA256SUMS.txt').read_bytes()).hexdigest()}]}
                 if corrupt: data['assets'][0]['digest']='sha256:wrong'
             binaries=root/'bin';binaries.mkdir()
-            gh=binaries/'gh';gh.write_text('#!/bin/bash\nprintf "%s" "$TEST_API"\nif [[ "$TEST_STATUS" != 0 ]]; then echo "HTTP $TEST_STATUS" >&2; exit 1; fi\n');gh.chmod(0o755)
+            gh=binaries/'gh';gh.write_text('#!/bin/bash\nif [[ "$TEST_REQUIRE_RELEASE_ID" == 1 && "$2" != "repos/fixture/repo/releases/123" ]]; then echo "expected exact draft release id" >&2; exit 1; fi\nprintf "%s" "$TEST_API"\nif [[ "$TEST_STATUS" != 0 ]]; then echo "HTTP $TEST_STATUS" >&2; exit 1; fi\n');gh.chmod(0o755)
             git=binaries/'git';git.write_text('#!/bin/bash\necho 0123456789abcdef\n');git.chmod(0o755)
             output=root/'outputs'
             result=subprocess.run(['python3',str(ROOT/'scripts'/script)],cwd=root,
                 env=dict(os.environ,PATH=str(binaries)+':'+os.environ['PATH'],TEST_API=json.dumps(data),
                     TEST_STATUS=str(status),GITHUB_REF_NAME='main',INPUT_TAG=tag,GITHUB_REPOSITORY='fixture/repo',
-                    GITHUB_OUTPUT=str(output),RELEASE_TAG='v1.0.28'),capture_output=True,text=True)
+                    GITHUB_OUTPUT=str(output),RELEASE_TAG='v1.0.28',RELEASE_ID='123',
+                    TEST_REQUIRE_RELEASE_ID='1' if script=='verify-release-assets.py' else '0'),capture_output=True,text=True)
             return result, output.read_text() if output.exists() else ''
 
     def test_published_release_is_never_rebuilt(self):
