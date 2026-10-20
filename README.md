@@ -75,13 +75,7 @@ Dictate code comments, documentation drafts, TODO items, or feature ideas withou
 
 Download the [signed and Apple-notarized DMG](https://github.com/desduvauchelle/tucky/releases/latest/download/Tucky-arm64.dmg), open it, and drag **Tucky** to **Applications**. Launch Tucky from Applications and follow onboarding. Speech and AI models download on first use.
 
-For command-line installation, open Terminal and paste:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/desduvauchelle/tucky/main/install.sh | bash
-```
-
-The script installs to `/Applications/`. Current public builds support Apple Silicon. To update manually, quit Tucky and drag the newest app into Applications, choosing Replace, or run the same installer command again.
+To update manually, quit Tucky and drag the newest app into Applications, choosing Replace.
 
 Tucky checks GitHub Releases on startup (with a one-hour throttle) and every 24 hours while running. You can also choose **Tucky → Check for Updates** or use the update button in **Settings → General**. When a newer version has downloaded, click **Restart now** in the update banner. Your local data and downloaded models remain in place.
 

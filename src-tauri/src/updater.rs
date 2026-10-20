@@ -312,19 +312,17 @@ pub fn spawn_relauncher() -> bool {
 /// The helper verifies the candidate, waits for the old process, retains a
 /// backup, and rolls back unless the new frontend acknowledges a healthy launch.
 #[cfg(target_os = "macos")]
-pub fn launch_update_helper() {
+pub fn launch_update_helper() -> Result<(), String> {
     // The helper script replaces /Applications/Tucky.app in place. An
     // isolated variant (fresh-install simulator) must never do that — it
     // would overwrite the real install.
     if !crate::is_primary_install() {
-        error!("self-update disabled for isolated variant builds");
-        return;
+        return Err("Self-update is disabled for isolated builds.".into());
     }
     let staging = match staging_app_path() {
         Some(p) if p.exists() => p,
         _ => {
-            error!("no staged update found");
-            return;
+            return Err("No downloaded update is available. Check for updates again.".into());
         }
     };
 
@@ -335,16 +333,13 @@ pub fn launch_update_helper() {
         .and_then(|out| String::from_utf8(out.stdout).ok())
         .map(|v| v.trim().to_string());
     let Some(version) = version.filter(|v| is_newer(env!("CARGO_PKG_VERSION"), v)) else {
-        error!("staged update is not a newer valid version");
-        return;
+        return Err("The downloaded update has an invalid version. Check for updates again.".into());
     };
     if !verify_update(&staging, &version) {
-        error!("refusing to install an unverified update");
-        return;
+        return Err("The downloaded update could not be verified. Your current app has been kept.".into());
     }
     let Some(target) = current_bundle_path() else {
-        error!("refusing self-update outside an app bundle");
-        return;
+        return Err("Open Tucky from Applications before updating.".into());
     };
     let token = uuid::Uuid::new_v4().to_string();
     let script_path = std::env::temp_dir().join(format!("tucky-update-{token}.sh"));
@@ -352,15 +347,15 @@ pub fn launch_update_helper() {
         std::process::id().to_string().into(), version.into(), token.into(),
         crate::log_dir().join("update-helper.log").into_os_string()];
     if !spawn_detached_script_with_args(&script_path, INSTALL_SCRIPT, "update", &args) {
-        return;
+        return Err("Could not start the updater. Your current app has been kept.".into());
     }
 
     std::process::exit(0);
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn launch_update_helper() {
-    warn!("self-update restart is only supported on macOS");
+pub fn launch_update_helper() -> Result<(), String> {
+    Err("Self-update restart is only supported on macOS.".into())
 }
 
 pub async fn check_and_download(app: &AppHandle) {
