@@ -72,6 +72,9 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - name: Select the supported OpenSSL API for native dependencies
+        run: bash scripts/select-macos-openssl.sh
+
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
