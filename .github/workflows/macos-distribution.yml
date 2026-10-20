@@ -10,6 +10,9 @@ on:
       - scripts/setup-ci-signing.sh
       - scripts/configure-apple-notarization.command
       - scripts/package-release.sh
+      - scripts/smoke-test.sh
+      - scripts/test-smoke-gate.py
+      - scripts/dmg-background.swift
   push:
     paths:
       - .github/workflows/release.yml
@@ -19,6 +22,9 @@ on:
       - scripts/setup-ci-signing.sh
       - scripts/configure-apple-notarization.command
       - scripts/package-release.sh
+      - scripts/smoke-test.sh
+      - scripts/test-smoke-gate.py
+      - scripts/dmg-background.swift
   workflow_dispatch:
 
 permissions:
@@ -39,3 +45,5 @@ jobs:
         run: python3 scripts/test-macos-release.py
       - name: Check updater and installer compatibility
         run: bash scripts/test-installer.sh
+      - name: Require a real frontend checkpoint for launch verification
+        run: python3 scripts/test-smoke-gate.py

@@ -2,6 +2,12 @@
 # Double-click this file after creating the Apple app-specific password.
 # Read it privately, validate it with Apple, then save it to Keychain/GitHub.
 set -euo pipefail
+LOCAL_ONLY=0
+case "${1:-}" in
+  "") ;;
+  --local-only) LOCAL_ONLY=1 ;;
+  *) echo "Usage: $0 [--local-only]" >&2; exit 2 ;;
+esac
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 umask 077
 mkdir -p "$ROOT/output/apple-signing"
@@ -23,14 +29,21 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 record_status starting
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
-for tool in gh xcrun; do
+for tool in xcrun; do
   command -v "$tool" >/dev/null || { echo "Missing tool: $tool" >&2; exit 1; }
 done
-STAGE=github_login
-gh auth status >/dev/null 2>&1 || { echo "GitHub login is required." >&2; exit 1; }
+if [[ "$LOCAL_ONLY" == 0 ]]; then
+  command -v gh >/dev/null || { echo "Missing tool: gh" >&2; exit 1; }
+  STAGE=github_login
+  gh auth status >/dev/null 2>&1 || { echo "GitHub login is required." >&2; exit 1; }
+fi
 echo "Tucky Apple notarization setup"
 echo "Create an app-specific password named 'Tucky GitHub Releases' at account.apple.com."
-echo "Enter that password here. It will be hidden and saved only to Keychain and encrypted GitHub Actions secrets."
+if [[ "$LOCAL_ONLY" == 1 ]]; then
+  echo "Enter that password here. It will be hidden and saved only to this Mac's Keychain."
+else
+  echo "Enter that password here. It will be hidden and saved only to Keychain and encrypted GitHub Actions secrets."
+fi
 APPLE_ACCOUNT="${TUCKY_APPLE_ID:-}"
 if [[ -z "$APPLE_ACCOUNT" && -f "$ROOT/output/apple-signing/apple-account.txt" ]]; then
   APPLE_ACCOUNT="$(cat "$ROOT/output/apple-signing/apple-account.txt")"
@@ -58,13 +71,17 @@ record_status "$STAGE"
 xcrun notarytool store-credentials tucky-apple-notarization \
   --apple-id "$APPLE_ACCOUNT" --team-id BSH2UEDLU5 \
   --password "$TUCKY_PASSWORD" >/dev/null
-STAGE=saving_to_github
-record_status "$STAGE"
-printf '%s' "$TUCKY_PASSWORD" | gh secret set TUCKY_APPLE_APP_SPECIFIC_PASSWORD \
-  --repo desduvauchelle/tucky
+if [[ "$LOCAL_ONLY" == 0 ]]; then
+  STAGE=saving_to_github
+  record_status "$STAGE"
+  printf '%s' "$TUCKY_PASSWORD" | gh secret set TUCKY_APPLE_APP_SPECIFIC_PASSWORD \
+    --repo desduvauchelle/tucky
+fi
 unset TUCKY_PASSWORD
 STAGE=complete
 record_status complete
 echo "Apple validated the credential. Saved Keychain profile: tucky-apple-notarization"
-echo "Saved encrypted GitHub secret: TUCKY_APPLE_APP_SPECIFIC_PASSWORD"
+if [[ "$LOCAL_ONLY" == 0 ]]; then
+  echo "Saved encrypted GitHub secret: TUCKY_APPLE_APP_SPECIFIC_PASSWORD"
+fi
 read -r -p "Press Return to close. " _

@@ -104,6 +104,7 @@ jobs:
             output/mac-release/Tucky-aarch64.tar.gz
             output/mac-release/EchoScribe-aarch64.tar.gz
             output/mac-release/Tucky-*.dmg
+            output/mac-release/SHA256SUMS.txt
           if-no-files-found: error
 
       - name: Remove temporary signing credentials
@@ -134,6 +135,7 @@ jobs:
             Tucky-*.tar.gz
             EchoScribe-*.tar.gz
             Tucky-*.dmg
+            SHA256SUMS.txt
 
       - name: Verify published assets
         run: |
@@ -144,3 +146,5 @@ jobs:
             "https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/Tucky-aarch64.tar.gz"
           curl --fail --location --retry 5 --retry-all-errors --silent --show-error --head \
             "https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/Tucky-${RELEASE_TAG#v}-arm64.dmg"
+          curl --fail --location --retry 5 --retry-all-errors --silent --show-error --head \
+            "https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/Tucky-arm64.dmg"

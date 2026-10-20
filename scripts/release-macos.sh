@@ -79,13 +79,10 @@ spctl --assess --type execute --verbose=2 "$APP"
 
 # Keep existing updater and MCP archive paths using the same approved app.
 bash scripts/package-release.sh "$APP" "$OUT"
-mkdir -p "$WORK/dmg"
-ditto "$APP" "$WORK/dmg/Tucky.app"
-ln -s /Applications "$WORK/dmg/Applications"
 VERSION="$(python3 -c 'import json; print(json.load(open("package.json"))["version"])')"
 ARCH="$(uname -m)"
 DMG="$OUT/Tucky-$VERSION-$ARCH.dmg"
-hdiutil create -volname Tucky -srcfolder "$WORK/dmg" -format UDZO -ov "$WORK/Tucky.dmg"
+bash scripts/create-macos-dmg.sh "$APP" "$WORK/Tucky.dmg"
 codesign --force --sign "$IDENTITY" --timestamp "$WORK/Tucky.dmg"
 notarize "$WORK/Tucky.dmg"
 xcrun stapler staple "$WORK/Tucky.dmg"
@@ -93,4 +90,8 @@ xcrun stapler validate "$WORK/Tucky.dmg"
 codesign --verify --strict "$WORK/Tucky.dmg"
 spctl --assess --type open --context context:primary-signature --verbose=2 "$WORK/Tucky.dmg"
 mv "$WORK/Tucky.dmg" "$DMG"
+# Stable filename for /releases/latest/download/Tucky-arm64.dmg links.
+cp "$DMG" "$OUT/Tucky-$ARCH.dmg"
+(cd "$OUT" && shasum -a 256 "$(basename "$DMG")" "Tucky-$ARCH.dmg" \
+  Tucky-aarch64.tar.gz EchoScribe-aarch64.tar.gz > SHA256SUMS.txt)
 echo "Verified Finder installer: $DMG"

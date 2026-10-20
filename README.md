@@ -4,11 +4,9 @@
 
 **[tucky.ai-juicing.com →](https://tucky.ai-juicing.com)**
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/desduvauchelle/tucky/main/install.sh | bash
-```
+**[Download Tucky for Mac](https://github.com/desduvauchelle/tucky/releases/latest/download/Tucky-arm64.dmg)**
 
-macOS 14+, Apple Silicon or Intel. [What the installer does ↓](#install-on-macos)
+macOS 14+, Apple Silicon (M1 or later). Open the DMG and drag Tucky into Applications.
 
 > Previously Echo Scribe. Existing data stays in place when upgrading; see
 > [rebrand compatibility](docs/REBRAND.md) for the intentionally preserved paths.
@@ -75,24 +73,26 @@ Dictate code comments, documentation drafts, TODO items, or feature ideas withou
 
 ## Install on macOS
 
-Open Terminal (Cmd+Space, type "Terminal", press Enter) and paste:
+Download the [signed and Apple-notarized DMG](https://github.com/desduvauchelle/tucky/releases/latest/download/Tucky-arm64.dmg), open it, and drag **Tucky** to **Applications**. Launch Tucky from Applications and follow onboarding. Speech and AI models download on first use.
+
+For command-line installation, open Terminal and paste:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/desduvauchelle/tucky/main/install.sh | bash
 ```
 
-The script installs to `/Applications/`, handles macOS security permissions, and works on both Apple Silicon and Intel. To update, run the same command again.
+The script installs to `/Applications/`. Current public builds support Apple Silicon. To update manually, quit Tucky and drag the newest app into Applications, choosing Replace, or run the same installer command again.
 
-Tucky also checks GitHub Releases in the background. When a newer release has been downloaded, the app shows a restart banner and replaces the app bundle on restart while preserving your local data in `~/Library/Application Support/EchoScribe/`.
+Tucky checks GitHub Releases on startup (with a one-hour throttle) and every 24 hours while running. You can also choose **Tucky → Check for Updates** or use the update button in **Settings → General**. When a newer version has downloaded, click **Restart now** in the update banner. Your local data and downloaded models remain in place.
 
-The public build is ad-hoc signed, not Developer ID notarized. The installer and updater remove the quarantine flag after downloading so macOS should not show the "developer cannot be verified" block for installs done through this command.
+Starting with version 1.0.27, public macOS builds are Developer ID signed and Apple-notarized. The DMG and the app carry stapled notarization tickets.
 
 ---
 
 ## macOS requirements
 
 - macOS 14 or later
-- Apple Silicon (M1/M2/M3/M4) or Intel Mac
+- Apple Silicon (M1 or later); current releases do not include an Intel build
 - ~2 GB disk space for AI models (downloaded on first use)
 
 ## Install on Windows

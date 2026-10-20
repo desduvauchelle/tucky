@@ -28,6 +28,12 @@ permissions again on the first launch.
    Enter the app-specific password at the prompt. This validates the account
    and saves the credentials in Keychain.
 
+   For a local release without changing GitHub secrets, run:
+
+   ```sh
+   bash scripts/configure-apple-notarization.command --local-only
+   ```
+
 ## Build
 
 ```sh
@@ -39,11 +45,15 @@ The release command checks notarization authentication, builds the app,
 signs native libraries and sidecars with Hardened Runtime and timestamps,
 adds the existing MCP executable alias, submits the app to Apple, staples
 the ticket, and verifies Gatekeeper acceptance. It then creates and signs
-a DMG with an Applications shortcut, notarizes and staples the DMG, and
+a DMG with an Applications shortcut, a Retina background, and a saved Finder
+layout with large icons and drag-to-install instructions. It notarizes and staples the DMG, and
 verifies it again. It never strips quarantine or installs into Applications.
 
 Outputs are in `output/mac-release/`. The DMG is named with the current
-version and build Mac architecture. The existing Tucky and EchoScribe
+version and build Mac architecture. `Tucky-arm64.dmg` is an identical copy
+with a stable filename for GitHub's `/releases/latest/download/` URL.
+`SHA256SUMS.txt` covers both DMG names and the updater archives.
+The existing Tucky and EchoScribe
 updater archives contain the same stapled app. This does not change the
 updater protocol or publish anything.
 
@@ -88,6 +98,26 @@ Tags must include the new workflow and release scripts. Selecting an older
 tag builds that tag's old workflow. This setup does not push local changes,
 create a tag, run CI, or publish an existing local build automatically.
 
+## User updates and verification limits
+
+The app checks the latest public GitHub release on startup (at most once an
+hour) and every 24 hours while running. A manual check is available in the
+Tucky menu and Settings. A newer version is downloaded from
+`Tucky-aarch64.tar.gz`; the user clicks **Restart now** to apply it.
+Keep both updater archive names on every release for older installations.
+
+The custom updater currently checks the extracted app and executable exist,
+but does not validate the Developer ID/team before installation. Its helper
+removes the old bundle before copying the replacement and has no rollback
+copy. Those are separate updater-hardening gaps; notarizing a release does
+not repair them. Users can instead quit Tucky and replace it from the DMG.
+
+The launch smoke check requires the actual `SMOKE OK view=...` frontend
+checkpoint. A zero exit alone can mean a second launch handed control to an
+already-running instance. Local launch verification uses temporary data and
+does not establish a full older-version download, replacement, and restart
+test on a fresh Mac.
+
 Local verification:
 
 ```sh
@@ -101,23 +131,21 @@ References: [Apple Developer ID](https://developer.apple.com/developer-id/)
 and [Tauri macOS signing](https://v2.tauri.app/distribute/sign/macos/).
 For CI keychain handling, see [GitHub's Apple signing guide](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications).
 
-## Resume after Apple's account update
+## Finish the first public release
 
-The account setup is currently blocked by Apple's agreement state. App Store
-Connect shows **Developer Information Update In Process** and the current
-Free Apps Agreement is **Pending (New Legal Entity)**, although the Developer
-account records the Program License Agreement as accepted. Apple Developer
-Support has been contacted. Repeated password generation does not resolve
-this agreement state.
-
-When the current Free Apps Agreement becomes **Active** and Apple confirms
-the account update is complete:
+Check current prerequisites rather than relying on an earlier account-status
+snapshot. `security find-identity -v -p codesigning` must list a valid Developer
+ID Application identity, and the configured `notarytool` profile must authenticate.
+On October 20, 2026, the default Keychain profile authenticated and the local
+1.0.27 arm64 app and DMG were both accepted by Apple. Both tickets were
+stapled and validated, and Gatekeeper reported `Notarized Developer ID`.
+These local results do not verify GitHub credentials, a CI release, or public hosting.
 
 1. Double-click `scripts/configure-apple-notarization.command`. Paste the
    Apple-generated app-specific password at the hidden prompt. Use the
    generated value, not its label or the main Apple account password.
    Successful validation saves the local Keychain profile and the fifth
-   GitHub secret. Four certificate/account secrets are already configured.
+   GitHub secret. Use `--local-only` to save only to this Mac's Keychain.
 2. Run `bun run release:mac`. This authenticates before building, then
    performs the real Apple submissions and verifies the stapled app and DMG.
 3. Open the resulting DMG in Finder and verify its Applications shortcut.
