@@ -9,10 +9,15 @@ use std::{
 };
 use transcribe_rs::whisper_cpp::{WhisperEngine, WhisperInferenceParams};
 
-fn transcription_params(_path: &Path) -> WhisperInferenceParams {
+/// `language` is an ISO code chosen by the app, or None to auto-detect.
+/// A fixed language skips Whisper's per-call detection pass (about 2x faster).
+fn transcription_params(_path: &Path, language: Option<&str>) -> WhisperInferenceParams {
     // Example prose can leak into recognition as words the user never said.
     // Keep decoding unprompted, including for Turbo.
-    WhisperInferenceParams::default()
+    WhisperInferenceParams {
+        language: language.map(str::to_owned),
+        ..WhisperInferenceParams::default()
+    }
 }
 
 fn emit(value: serde_json::Value) -> io::Result<()> {
@@ -25,8 +30,15 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let path = std::env::args_os()
         .nth(1)
         .ok_or("Missing Whisper model path")?;
+    let language = std::env::args()
+        .nth(2)
+        .filter(|l| !l.is_empty() && l != "auto");
     let mut engine = WhisperEngine::load(Path::new(&path))?;
-    let params = transcription_params(Path::new(&path));
+    let params = transcription_params(Path::new(&path), language.as_deref());
+    eprintln!(
+        "tucky-whisper: language={}",
+        language.as_deref().unwrap_or("auto")
+    );
     emit(json!({"ready": true}))?;
     let mut input = io::stdin().lock();
     loop {
@@ -76,9 +88,10 @@ mod tests {
 
     #[test]
     fn turbo_does_not_prime_transcription_with_unspoken_text() {
-        let params = transcription_params(Path::new(
-            "/models/whisper-turbo/ggml-large-v3-turbo-q5_0.bin",
-        ));
+        let params = transcription_params(
+            Path::new("/models/whisper-turbo/ggml-large-v3-turbo-q5_0.bin"),
+            None,
+        );
         assert!(params.initial_prompt.is_none());
         assert!(params.language.is_none());
         assert!(!params.translate);
@@ -89,9 +102,15 @@ mod tests {
     #[test]
     fn other_whisper_models_keep_default_decoding() {
         for path in ["/models/whisper-base/ggml-base.bin", "/models/other.bin"] {
-            assert!(transcription_params(Path::new(path))
+            assert!(transcription_params(Path::new(path), None)
                 .initial_prompt
                 .is_none());
         }
+    }
+
+    #[test]
+    fn fixed_language_is_passed_to_whisper() {
+        let params = transcription_params(Path::new("/models/x.bin"), Some("fr"));
+        assert_eq!(params.language.as_deref(), Some("fr"));
     }
 }

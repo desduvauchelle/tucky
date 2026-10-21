@@ -40,6 +40,8 @@ pub enum AsrError {
 pub struct AsrPipeline {
     engine: Arc<Mutex<Option<SpeechEngine>>>,
     active_model: Arc<RwLock<Option<ModelEntry>>>,
+    /// Dictation language setting (`auto` or an ISO code); read when a worker loads.
+    language: Arc<RwLock<String>>,
     last_used: Arc<Mutex<Instant>>,
     unload_after: Arc<Mutex<Duration>>,
     active_jobs: Arc<AtomicUsize>,
@@ -97,6 +99,7 @@ impl AsrPipeline {
         Self {
             engine: Arc::new(Mutex::new(None)),
             active_model: Arc::new(RwLock::new(None)),
+            language: Arc::new(RwLock::new("auto".to_owned())),
             last_used: Arc::new(Mutex::new(Instant::now())),
             unload_after: Arc::new(Mutex::new(unload_after)),
             active_jobs: Arc::new(AtomicUsize::new(0)),
@@ -211,6 +214,22 @@ impl AsrPipeline {
         }
     }
 
+    fn language(&self) -> String {
+        self.language
+            .read()
+            .map(|l| l.clone())
+            .unwrap_or_else(|_| "auto".to_owned())
+    }
+
+    /// Update the dictation language. A loaded engine started with a different
+    /// effective language is recreated on the next transcription (`matches`).
+    pub fn set_language(&self, language: &str) {
+        info!(target: "asr", language, "dictation language changed");
+        if let Ok(mut g) = self.language.write() {
+            *g = language.to_owned();
+        }
+    }
+
     pub fn active_model_id(&self) -> Option<String> {
         self.active_model
             .read()
@@ -248,6 +267,7 @@ impl AsrPipeline {
         };
         let Some(model_path) = model_path else { return };
         let engine_slot = Arc::clone(&self.engine);
+        let language = self.language();
         // Drop the handle — fire and forget.
         let _ = tokio::task::spawn_blocking(move || {
             let mut guard = match engine_slot.lock() {
@@ -256,7 +276,7 @@ impl AsrPipeline {
             };
             if !guard
                 .as_mut()
-                .is_some_and(|engine| engine.matches(&model_path))
+                .is_some_and(|engine| engine.matches(&model_path, &language))
             {
                 *guard = None;
                 let rss_before_mib = current_rss_mib();
@@ -266,7 +286,7 @@ impl AsrPipeline {
                     rss_mib_before = rss_before_mib,
                     "[mem] pre-loading speech engine (optimistic warm-up)"
                 );
-                match SpeechEngine::load(&model_path) {
+                match SpeechEngine::load(&model_path, &language) {
                     Ok(eng) => {
                         *guard = Some(eng);
                         let rss_after_mib = current_rss_mib();
@@ -313,6 +333,7 @@ impl AsrPipeline {
         };
 
         let engine_slot = Arc::clone(&self.engine);
+        let language = self.language();
         self.touch();
         let last_used = Arc::clone(&self.last_used);
         let input_samples = samples.len();
@@ -333,6 +354,22 @@ impl AsrPipeline {
 
         let resampled_samples = resampled.len();
 
+        // Silence gate: never send a clip with no speech to the model (Whisper &
+        // friends hallucinate "Thank you." on silence). Stats are taken before
+        // VAD trimming, which returns the whole buffer for an all-silent clip.
+        let stats = crate::asr::hallucination::analyze(&resampled);
+        if crate::asr::hallucination::is_silent(&stats) {
+            info!(
+                target: "transcribe",
+                duration_ms = stats.duration_ms,
+                rms = stats.rms,
+                peak = stats.peak,
+                voiced_ms = stats.voiced_ms,
+                "silence gate: no speech detected, skipping transcription"
+            );
+            return Ok(String::new());
+        }
+
         // Strip silent frames so Parakeet only sees speech audio.
         // filter_silence returns the original buffer if the whole recording
         // is below the energy threshold, so this is always safe.
@@ -347,7 +384,7 @@ impl AsrPipeline {
             let mut guard = engine_slot.lock().map_err(|_| AsrError::Join)?;
             if !guard
                 .as_mut()
-                .is_some_and(|engine| engine.matches(&model_path))
+                .is_some_and(|engine| engine.matches(&model_path, &language))
             {
                 *guard = None;
                 let rss_before_mib = current_rss_mib();
@@ -357,7 +394,7 @@ impl AsrPipeline {
                     rss_mib_before = rss_before_mib,
                     "[mem] lazy-loading speech engine"
                 );
-                let eng = SpeechEngine::load(&model_path)?;
+                let eng = SpeechEngine::load(&model_path, &language)?;
                 *guard = Some(eng);
                 let rss_after_mib = current_rss_mib();
                 info!(
@@ -376,6 +413,22 @@ impl AsrPipeline {
         })
         .await
         .map_err(|_| AsrError::Join)??;
+
+        let text = if crate::asr::hallucination::should_drop_hallucination(&text, &stats) {
+            warn!(
+                target: "transcribe",
+                dropped_text = %text,
+                duration_ms = stats.duration_ms,
+                rms = stats.rms,
+                peak = stats.peak,
+                voiced_ms = stats.voiced_ms,
+                speech_rms = stats.speech_rms,
+                "hallucination filter: dropped known silence-hallucination output"
+            );
+            String::new()
+        } else {
+            text
+        };
 
         let inference_ms = t1.elapsed().as_millis();
         let total_ms = t0.elapsed().as_millis();
@@ -524,6 +577,7 @@ impl AsrPipeline {
         };
 
         let engine_slot = Arc::clone(&self.engine);
+        let language = self.language();
 
         let resampled = tokio::task::spawn_blocking(move || {
             resample_to_16k_mono(&samples, from_rate, channels)
@@ -535,15 +589,28 @@ impl AsrPipeline {
             return Ok(Vec::new());
         }
 
+        let stats = crate::asr::hallucination::analyze(&resampled);
+        if crate::asr::hallucination::is_silent(&stats) {
+            info!(
+                target: "transcribe",
+                duration_ms = stats.duration_ms,
+                rms = stats.rms,
+                peak = stats.peak,
+                voiced_ms = stats.voiced_ms,
+                "silence gate: caption chunk has no speech, skipping"
+            );
+            return Ok(Vec::new());
+        }
+
         let segments = tokio::task::spawn_blocking(
             move || -> Result<Vec<transcribe_rs::TranscriptionSegment>, AsrError> {
                 let mut guard = engine_slot.lock().map_err(|_| AsrError::Join)?;
                 if !guard
                     .as_mut()
-                    .is_some_and(|engine| engine.matches(&model_path))
+                    .is_some_and(|engine| engine.matches(&model_path, &language))
                 {
                     *guard = None;
-                    let eng = SpeechEngine::load(&model_path)?;
+                    let eng = SpeechEngine::load(&model_path, &language)?;
                     *guard = Some(eng);
                 }
                 let eng = guard.as_mut().expect("engine just loaded");
@@ -771,8 +838,8 @@ mod model_switch_tests {
         let wav = std::env::var("TUCKY_ASR_TEST_WAV").expect("set the test WAV path");
         let pipeline = AsrPipeline::default();
         let mut ids = vec!["parakeet-v3", "whisper-base"];
-        if cfg!(any(debug_assertions, tucky_local_asr)) { ids.push("whisper-turbo"); }
-        if cfg!(all(any(debug_assertions, tucky_local_asr), target_os = "macos", target_arch = "aarch64")) { ids.push("qwen3-asr"); }
+        ids.push("whisper-turbo");
+        if cfg!(all(debug_assertions, target_os = "macos", target_arch = "aarch64")) { ids.push("qwen3-asr"); }
         ids.push("parakeet-v3");
         for id in ids {
             let entry = crate::asr::registry::lookup(id).unwrap().clone();

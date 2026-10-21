@@ -2760,7 +2760,9 @@ pub fn set_transcription_cleanup_language(
     state
         .settings
         .set_transcription_cleanup_language(&language)
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    state.asr.set_language(&language);
+    Ok(())
 }
 
 #[tauri::command]

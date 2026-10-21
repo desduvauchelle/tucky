@@ -648,6 +648,7 @@ pub fn run() {
             let asr = Arc::new(AsrPipeline::new(std::time::Duration::from_secs(
                 settings.asr_unload_secs(),
             )));
+            asr.set_language(&settings.transcription_cleanup_language());
             {
                 let saved_id = settings
                     .speech_model_id()

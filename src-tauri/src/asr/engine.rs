@@ -12,35 +12,63 @@ use transcribe_rs::TranscriptionSegment;
 
 pub struct SpeechEngine {
     path: PathBuf,
+    /// Whisper language this engine was started with (None for auto and for
+    /// non-Whisper models, which ignore the setting).
+    language: Option<&'static str>,
     backend: Backend,
+}
+
+/// Map the dictation language setting to a Whisper ISO code. `auto` and
+/// anything Whisper does not support return None, which keeps auto-detection.
+fn effective_language(path: &Path, setting: &str) -> Option<&'static str> {
+    match path.file_name().and_then(|p| p.to_str()) {
+        Some("whisper-turbo" | "whisper-base") => whisper_language(setting),
+        _ => None,
+    }
+}
+
+pub fn whisper_language(setting: &str) -> Option<&'static str> {
+    const SUPPORTED: &[&str] = &["en", "es", "fr", "de", "pt", "it", "nl", "pl"];
+    let setting = setting.trim().to_ascii_lowercase();
+    SUPPORTED.iter().copied().find(|c| *c == setting)
 }
 enum Backend {
     Parakeet(ParakeetEngine),
     Worker(SpeechProcess),
 }
 impl SpeechEngine {
-    pub fn load(path: &Path) -> Result<Self, EngineError> {
+    pub fn load(path: &Path, language: &str) -> Result<Self, EngineError> {
+        let whisper_lang = effective_language(path, language);
         let backend = match path.file_name().and_then(|p| p.to_str()) {
             Some("parakeet-v3") => Backend::Parakeet(ParakeetEngine::load(path)?),
             Some("whisper-turbo") => Backend::Worker(SpeechProcess::load(
                 &path.join("ggml-large-v3-turbo-q5_0.bin"),
+                whisper_lang,
             )?),
-            #[cfg(all(any(debug_assertions, tucky_local_asr), target_os = "macos", target_arch = "aarch64"))]
+            // Dev only until the Python runtime is bundled (see registry.rs).
+            #[cfg(all(debug_assertions, target_os = "macos", target_arch = "aarch64"))]
             Some("qwen3-asr") => Backend::Worker(SpeechProcess::load_qwen(path)?),
+            #[cfg(debug_assertions)]
+            Some("nemotron-3.5-streaming") => Backend::Worker(SpeechProcess::load_nemotron(path)?),
             Some("whisper-base") => {
-                Backend::Worker(SpeechProcess::load(&path.join("ggml-base.bin"))?)
+                Backend::Worker(SpeechProcess::load(
+                    &path.join("ggml-base.bin"),
+                    whisper_lang,
+                )?)
             }
             _ => return Err(EngineError::Io("Unknown speech model".into())),
         };
         Ok(Self {
             path: path.to_owned(),
+            language: whisper_lang,
             backend,
         })
     }
     /// A model selected during an in-flight resample/warm-up must never reuse a
     /// different engine. A failed worker is recreated on the next dictation.
-    pub fn matches(&mut self, path: &Path) -> bool {
+    pub fn matches(&mut self, path: &Path, language: &str) -> bool {
         self.path == path
+            && self.language == effective_language(path, language)
             && match &mut self.backend {
                 Backend::Parakeet(_) => true,
                 Backend::Worker(worker) => {
@@ -51,7 +79,10 @@ impl SpeechEngine {
     pub fn transcribe(&mut self, samples: &[f32]) -> Result<String, EngineError> {
         match &mut self.backend {
             Backend::Parakeet(engine) => engine.transcribe(samples),
-            Backend::Worker(worker) => worker.transcribe(samples).map(|r| r.text),
+            Backend::Worker(worker) => worker.transcribe(samples).map(|r| r.text).map_err(|e| {
+                tracing::warn!(target: "asr", model = ?self.path.file_name(), error = %e, "Worker transcription failed");
+                e
+            }),
         }
     }
     pub fn transcribe_segments(
@@ -135,12 +166,13 @@ impl Drop for SpeechProcess {
     }
 }
 impl SpeechProcess {
-    fn load(path: &Path) -> Result<Self, EngineError> {
+    fn load(path: &Path, language: Option<&str>) -> Result<Self, EngineError> {
         let mut command = Command::new(worker_path()?);
-        command.arg(path);
+        command.arg(path).arg(language.unwrap_or("auto"));
+        tracing::info!(target: "asr", model = ?path.file_name(), language = language.unwrap_or("auto"), "Configuring whisper worker language");
         Self::spawn(command)
     }
-    #[cfg(all(any(debug_assertions, tucky_local_asr), target_os = "macos", target_arch = "aarch64"))]
+    #[cfg(all(debug_assertions, target_os = "macos", target_arch = "aarch64"))]
     fn load_qwen(path: &Path) -> Result<Self, EngineError> {
         let python = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/qwen-runtime/bin/python");
         if !python.is_file() {
@@ -155,6 +187,32 @@ impl SpeechProcess {
             .env("HF_HUB_OFFLINE", "1")
             .env("TRANSFORMERS_OFFLINE", "1");
         Self::spawn(command)
+    }
+    /// Dev-only: the sherpa-onnx worker is built by `scripts/build-nemotron-worker.sh`
+    /// (or `bun run asr:setup`) and is not bundled in releases.
+    #[cfg(debug_assertions)]
+    fn load_nemotron(path: &Path) -> Result<Self, EngineError> {
+        let worker = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("target/nemotron-worker/release/tucky-nemotron");
+        if !worker.is_file() {
+            tracing::error!(target: "asr", worker = %worker.display(), "Nemotron worker binary missing");
+            return Err(io_error(
+                "Nemotron runtime is missing. Run bash scripts/build-nemotron-worker.sh, then restart the local dev app.",
+            ));
+        }
+        let started = std::time::Instant::now();
+        let mut command = Command::new(&worker);
+        command.arg(path);
+        match Self::spawn(command) {
+            Ok(process) => {
+                tracing::info!(target: "asr", model = "nemotron-3.5-streaming", path = %path.display(), worker = %worker.display(), load_ms = started.elapsed().as_millis() as u64, "Nemotron worker ready");
+                Ok(process)
+            }
+            Err(error) => {
+                tracing::error!(target: "asr", model = "nemotron-3.5-streaming", path = %path.display(), error = %error, "Nemotron worker failed to load");
+                Err(error)
+            }
+        }
     }
     fn spawn(mut command: Command) -> Result<Self, EngineError> {
         command
@@ -272,16 +330,55 @@ impl SpeechProcess {
 mod tests {
     use super::*;
     #[test]
+    fn dictation_language_maps_to_whisper_codes() {
+        for code in ["en", "es", "fr", "de", "pt", "it", "nl", "pl"] {
+            assert_eq!(whisper_language(code), Some(code));
+        }
+        assert_eq!(whisper_language(" FR "), Some("fr"));
+        for other in ["auto", "", "multiple", "xx", "zh-hans"] {
+            assert_eq!(whisper_language(other), None, "{other}");
+        }
+        assert_eq!(effective_language(Path::new("/m/whisper-turbo"), "fr"), Some("fr"));
+        assert_eq!(effective_language(Path::new("/m/parakeet-v3"), "fr"), None);
+    }
+    #[test]
     fn unknown_model_is_rejected_before_loading() {
-        assert!(SpeechEngine::load(Path::new("/models/unknown-model")).is_err());
+        assert!(SpeechEngine::load(Path::new("/models/unknown-model"), "auto").is_err());
+    }
+    #[test]
+    #[cfg(debug_assertions)]
+    fn nemotron_load_fails_loudly_without_model_or_worker() {
+        // Dispatch reaches the Nemotron arm (not "Unknown speech model") and errors.
+        let error = SpeechEngine::load(Path::new("/nonexistent/nemotron-3.5-streaming"), "auto")
+            .err()
+            .expect("must fail");
+        assert!(!error.to_string().contains("Unknown speech model"), "{error}");
+    }
+    #[test]
+    #[cfg(debug_assertions)]
+    #[ignore = "Requires NEMOTRON_MODEL_DIR (dir named nemotron-3.5-streaming), NEMOTRON_WAV (16k mono) and the built worker"]
+    fn nemotron_transcribes_real_audio() {
+        let dir = std::env::var("NEMOTRON_MODEL_DIR").unwrap();
+        let wav = std::fs::read(std::env::var("NEMOTRON_WAV").unwrap()).unwrap();
+        let samples: Vec<f32> = wav[44..]
+            .chunks_exact(2)
+            .map(|b| i16::from_le_bytes([b[0], b[1]]) as f32 / 32768.0)
+            .collect();
+        let mut engine = SpeechEngine::load(Path::new(&dir), "auto").unwrap();
+        let text = engine.transcribe(&samples).unwrap();
+        println!("NEMOTRON_TEXT: {text}");
+        assert!(!text.trim().is_empty());
     }
     #[test]
     #[ignore = "Requires downloaded Whisper Base and the built native worker"]
     fn whisper_worker_reuses_process_and_exits_on_drop() {
         let entry = crate::asr::registry::lookup("whisper-base").unwrap();
         let mut worker =
-            SpeechProcess::load(&crate::asr::downloader::model_dir(entry).join("ggml-base.bin"))
-                .unwrap();
+            SpeechProcess::load(
+                &crate::asr::downloader::model_dir(entry).join("ggml-base.bin"),
+                Some("en"),
+            )
+            .unwrap();
         let pid = worker.child.id();
         for _ in 0..2 {
             let result = worker.transcribe(&vec![0.0; 16000]).unwrap();
