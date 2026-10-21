@@ -780,6 +780,7 @@
       "useThisModel": "Dit model gebruiken",
       "download": "Downloaden",
       "incompleteDownload": "Onvolledige download · {{size}} op schijf",
+      "cpuAverage": "{{percent}}% CPU",
       "remove": "Verwijderen",
       "retrying": "Verbinding onderbroken — opnieuw proberen…"
     }

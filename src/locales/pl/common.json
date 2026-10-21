@@ -818,6 +818,7 @@
       "useThisModel": "Użyj tego modelu",
       "download": "Pobierz",
       "incompleteDownload": "Niepełne pobieranie · {{size}} na dysku",
+      "cpuAverage": "{{percent}}% CPU",
       "remove": "Usuń",
       "retrying": "Połączenie przerwane — ponawianie…"
     }

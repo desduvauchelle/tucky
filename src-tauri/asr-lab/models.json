@@ -28,5 +28,162 @@
         "size_bytes": 574041195
       }
     ]
+  },
+  {
+    "id": "qwen3-asr",
+    "display_name": "Qwen3-ASR",
+    "version_label": "0.6B \u00b7 4-bit",
+    "description": "Fast multilingual transcription \u00b7 Apple silicon",
+    "size_label": "Medium",
+    "size_bytes": 712778752,
+    "is_default": false,
+    "files": [
+      {
+        "name": "chat_template.json",
+        "url": "https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-4bit/resolve/313d850181767edf09f00a9c289becca70e58cd0/chat_template.json",
+        "sha256": "75a8cfca24f00de72d796fbfed6858fc9614ef3dabd8696684cc3bc03a9c58ff",
+        "size_bytes": 1161
+      },
+      {
+        "name": "config.json",
+        "url": "https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-4bit/resolve/313d850181767edf09f00a9c289becca70e58cd0/config.json",
+        "sha256": "923618cf5ca452fda0253a6be5c1a17f94a2e4851d3b98beb45848565587bd72",
+        "size_bytes": 7187
+      },
+      {
+        "name": "generation_config.json",
+        "url": "https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-4bit/resolve/313d850181767edf09f00a9c289becca70e58cd0/generation_config.json",
+        "sha256": "1da527824d81e07118facff437e03f2e24a23311e3bdeb2368973fe77e5f275c",
+        "size_bytes": 142
+      },
+      {
+        "name": "merges.txt",
+        "url": "https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-4bit/resolve/313d850181767edf09f00a9c289becca70e58cd0/merges.txt",
+        "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5",
+        "size_bytes": 1671853
+      },
+      {
+        "name": "model.safetensors",
+        "url": "https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-4bit/resolve/313d850181767edf09f00a9c289becca70e58cd0/model.safetensors",
+        "sha256": "70c7e67e588062adce4f10796e47ad42ead51c6671eda61a0987eae38ca95ddf",
+        "size_bytes": 708236945
+      },
+      {
+        "name": "model.safetensors.index.json",
+        "url": "https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-4bit/resolve/313d850181767edf09f00a9c289becca70e58cd0/model.safetensors.index.json",
+        "sha256": "e3bb80ef0fd42a5be07b04e90c97d60460bbde8af3531e0bfe9100a61404d81a",
+        "size_bytes": 71814
+      },
+      {
+        "name": "preprocessor_config.json",
+        "url": "https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-4bit/resolve/313d850181767edf09f00a9c289becca70e58cd0/preprocessor_config.json",
+        "sha256": "45e120a4eda2c20c5d7f2ea9354e63536bf35e27aa573fb7cdf78017b378770d",
+        "size_bytes": 330
+      },
+      {
+        "name": "tokenizer_config.json",
+        "url": "https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-4bit/resolve/313d850181767edf09f00a9c289becca70e58cd0/tokenizer_config.json",
+        "sha256": "4942d005604266809309cabc9f4e9cb89ce855d59b14681fdc0e1cc62ea26c4c",
+        "size_bytes": 12487
+      },
+      {
+        "name": "vocab.json",
+        "url": "https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-4bit/resolve/313d850181767edf09f00a9c289becca70e58cd0/vocab.json",
+        "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+        "size_bytes": 2776833
+      }
+    ],
+    "language_label": "Multilingual \u00b7 automatic detection",
+    "supported_languages": [
+      "zh",
+      "en",
+      "yue",
+      "ar",
+      "de",
+      "fr",
+      "es",
+      "pt",
+      "id",
+      "it",
+      "ko",
+      "ru",
+      "th",
+      "vi",
+      "ja",
+      "tr",
+      "hi",
+      "ms",
+      "nl",
+      "sv",
+      "da",
+      "fi",
+      "pl",
+      "cs",
+      "fil",
+      "fa",
+      "el",
+      "hu",
+      "mk",
+      "ro"
+    ],
+    "english_only": false,
+    "notes": "Apple silicon only. MLX Audio 0.5.6. Segment times represent audio chunks, not word alignment. Model revision and hashes match the personal voice benchmark."
+  },
+  {
+    "id": "nemotron-3.5-streaming",
+    "display_name": "Nemotron 3.5 Streaming (0.6B)",
+    "version_label": "0.6B \u00b7 int8",
+    "description": "NVIDIA cache-aware streaming model \u00b7 dev only",
+    "language_label": "15 languages \u00b7 automatic detection",
+    "supported_languages": [
+      "en",
+      "es",
+      "fr",
+      "it",
+      "pt",
+      "nl",
+      "de",
+      "tr",
+      "ru",
+      "ar",
+      "hi",
+      "ja",
+      "ko",
+      "vi",
+      "uk"
+    ],
+    "english_only": false,
+    "accuracy_bars": 4,
+    "speed_bars": 4,
+    "size_label": "Medium",
+    "size_bytes": 682215474,
+    "is_default": false,
+    "files": [
+      {
+        "name": "encoder.int8.onnx",
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-1120ms-int8-2026-06-11/resolve/cba1c96ca5ef0e8393b50584ae153a79145dc492/encoder.int8.onnx",
+        "sha256": "2fff2166acaa535bd969fb223c1f0783d71029f143cb298bc54c2afe85abf772",
+        "size_bytes": 657601521
+      },
+      {
+        "name": "decoder.int8.onnx",
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-1120ms-int8-2026-06-11/resolve/cba1c96ca5ef0e8393b50584ae153a79145dc492/decoder.int8.onnx",
+        "sha256": "19f9c98fc6d0a2c33a65a43b36fdb2e914c26c0aa9764be3aebc502a1e982fb0",
+        "size_bytes": 14978075
+      },
+      {
+        "name": "joiner.int8.onnx",
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-1120ms-int8-2026-06-11/resolve/cba1c96ca5ef0e8393b50584ae153a79145dc492/joiner.int8.onnx",
+        "sha256": "4101c7c679a0bc30483794b27a059e34e79232aa2068d78d51231a22c8b0d7ce",
+        "size_bytes": 9504438
+      },
+      {
+        "name": "tokens.txt",
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-1120ms-int8-2026-06-11/resolve/cba1c96ca5ef0e8393b50584ae153a79145dc492/tokens.txt",
+        "sha256": "729cc103155bafa785f9cd45746cd41cabe97eab7182fc04d594129587958f8a",
+        "size_bytes": 131440
+      }
+    ],
+    "notes": "Local development only. NVIDIA nemotron-3.5-asr-streaming-0.6b (cache-aware FastConformer-RNNT) exported for sherpa-onnx by csukuangfj2, int8, 1120 ms chunks; runs in the tucky-nemotron worker (built by scripts/build-nemotron-worker.sh) because sherpa-onnx's bundled ONNX Runtime cannot share a process with ort. Model card FLEURS avg WER 8.84% (language given) / 9.21% (auto-detect) at 1.12 s chunks across 19 locales. URLs pin HF revision cba1c96c; sha256 = HF LFS oids, verified against the official GitHub asr-models archive. Batch transcription only, auto language detection, no segment timestamps."
   }
 ]

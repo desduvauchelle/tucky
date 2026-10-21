@@ -48,8 +48,6 @@ xcrun notarytool history "${NOTARY_ARGS[@]}" --output-format json > "$WORK/histo
 # Final signing/notarization happens after adding the legacy executable alias.
 # Disable Tauri's automatic notarization so no bundle changes follow approval.
 unset APPLE_ID APPLE_PASSWORD APPLE_API_KEY APPLE_API_ISSUER APPLE_API_KEY_PATH
-export TUCKY_LOCAL_ASR="${TUCKY_LOCAL_ASR:-1}"
-export VITE_LOCAL_ASR="${VITE_LOCAL_ASR:-$TUCKY_LOCAL_ASR}"
 # Also covers the separate Whisper/wakeword Cargo builds invoked by build.rs.
 export CARGO_PROFILE_RELEASE_BUILD_OVERRIDE_STRIP=none
 APPLE_SIGNING_IDENTITY=- bun tauri build --bundles app

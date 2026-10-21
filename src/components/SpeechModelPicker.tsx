@@ -11,7 +11,7 @@ import {
   type DownloadProgress,
   type SpeechModelStatus,
 } from "../lib/api";
-import { asrModelBenchmarks, benchmarkGrade } from "../lib/asrModelBenchmarks";
+import { asrModelBenchmarks, benchmarkAudioSeconds, benchmarkGrade, benchmarkWerPercent } from "../lib/asrModelBenchmarks";
 import { formatBytes } from "../lib/format";
 import { DownloadIcon, TrashIcon } from "./icons";
 
@@ -63,7 +63,7 @@ type CardProps = {
 
 export function SpeechModelRow({ model, active, downloading, downloadError, busy, onDownload, onActivate, onDelete }: CardProps) {
   const { t } = useTranslation();
-  const benchmark = (import.meta.env.DEV || import.meta.env.VITE_LOCAL_ASR === "1") ? asrModelBenchmarks[model.id] : undefined;
+  const benchmark = asrModelBenchmarks[model.id];
   const inProgress = downloading !== null && !model.downloaded;
   const buttonClass = "inline-flex items-center gap-1 rounded-md border border-line px-2 py-1.5 text-xs hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-50";
   return (
@@ -77,15 +77,15 @@ export function SpeechModelRow({ model, active, downloading, downloadError, busy
       </th>
       <td className="px-3 py-3">
         <SegmentBar value={benchmark ? benchmarkGrade("errors", benchmark.errors) : model.accuracy_bars} />
-        <div className="mt-1 text-[11px] text-muted whitespace-nowrap">{benchmark ? `${(benchmark.errors / 53 * 100).toFixed(1)}% word errors` : "Not measured"}</div>
+        <div className="mt-1 text-[11px] text-muted whitespace-nowrap">{benchmark ? `${benchmarkWerPercent(benchmark).toFixed(1)}% word errors` : "Not measured"}</div>
       </td>
       <td className="px-3 py-3">
         <SegmentBar value={benchmark ? benchmarkGrade("warmSeconds", benchmark.warmSeconds) : model.speed_bars} />
-        <div className="mt-1 text-[11px] text-muted whitespace-nowrap">{benchmark ? `${benchmark.warmSeconds.toFixed(2)} s transcription` : "Not measured"}</div>
+        <div className="mt-1 text-[11px] text-muted whitespace-nowrap">{benchmark ? `${(benchmarkAudioSeconds / benchmark.warmSeconds).toFixed(0)}× real time` : "Not measured"}</div>
         {benchmark ? <div className="text-[11px] text-muted">{benchmark.loadSeconds.toFixed(2)} s load</div> : null}
       </td>
       <td className="px-3 py-3">
-        {benchmark ? <><SegmentBar value={benchmarkGrade("memoryGiB", benchmark.memoryGiB)} /><div className="mt-1 text-[11px] text-muted whitespace-nowrap">{benchmark.memoryGiB.toFixed(2)} GiB peak</div></> : <span className="text-xs text-muted">Not measured</span>}
+        {benchmark ? <><SegmentBar value={benchmarkGrade("memoryGiB", benchmark.memoryGiB)} /><div className="mt-1 text-[11px] text-muted whitespace-nowrap">{benchmark.memoryGiB.toFixed(2)} GiB peak</div><div className="text-[11px] text-muted whitespace-nowrap">{t("speechModelPicker.modelCard.cpuAverage", { percent: Math.round(benchmark.cpuPercent) })}</div></> : <span className="text-xs text-muted">Not measured</span>}
       </td>
       <td className="px-4 py-3">
         <div className="flex flex-wrap items-center justify-end gap-2">

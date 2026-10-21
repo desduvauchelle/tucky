@@ -780,6 +780,7 @@
       "useThisModel": "Usar este modelo",
       "download": "Baixar",
       "incompleteDownload": "Download incompleto · {{size}} em disco",
+      "cpuAverage": "{{percent}}% de CPU",
       "remove": "Remover",
       "retrying": "Conexão interrompida — tentando novamente…"
     }

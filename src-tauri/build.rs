@@ -10,11 +10,6 @@ use std::path::PathBuf;
 ///      them at build time avoids committing binaries while keeping the
 ///      runtime path zero-IO.
 fn main() {
-    println!("cargo:rustc-check-cfg=cfg(tucky_local_asr)");
-    println!("cargo:rerun-if-env-changed=TUCKY_LOCAL_ASR");
-    if std::env::var("TUCKY_LOCAL_ASR").as_deref() == Ok("1") {
-        println!("cargo:rustc-cfg=tucky_local_asr");
-    }
     // Build the Swift sidecars in release mode only (not during cargo check/test).
     let profile = std::env::var("PROFILE").unwrap_or_default();
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();

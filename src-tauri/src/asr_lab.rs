@@ -98,7 +98,7 @@ pub async fn asr_lab_run(id: String, samples: Vec<f32>) -> Result<Value, String>
             return Err("Download this model first".into());
         }
         let dir = downloader::model_dir(&model);
-        let path = if id == "parakeet-v3" {
+        let path = if matches!(id.as_str(), "parakeet-v3" | "qwen3-asr" | "nemotron-3.5-streaming") {
             dir
         } else {
             dir.join(&model.files[0].name)
@@ -124,6 +124,9 @@ pub async fn asr_lab_run(id: String, samples: Vec<f32>) -> Result<Value, String>
             .map_err(|_| "Comparison exceeded four minutes; worker stopped")??;
         if !output.status.success() {
             let message = String::from_utf8_lossy(&output.stderr);
+            if let Some(reason) = message.lines().find_map(|l| l.strip_prefix("SKIPPED: ")) {
+                return Err(format!("Skipped: {reason}"));
+            }
             return Err(format!(
                 "Model test failed: {}",
                 message
@@ -188,7 +191,7 @@ mod tests {
     #[test]
     fn lab_registry_does_not_change_dictation_models() {
         let dictation_ids: Vec<_> = registry::registry().iter().map(|model| model.id.clone()).collect();
-        assert_eq!(entries().len(), 3);
+        assert_eq!(entries().len(), 5);
         // Debug dictation now intentionally includes Whisper Turbo. The lab
         // must leave that existing catalog unchanged, not assume its absence.
         assert_eq!(registry::registry().iter().map(|model| model.id.clone()).collect::<Vec<_>>(), dictation_ids);

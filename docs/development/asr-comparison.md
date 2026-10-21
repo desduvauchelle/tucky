@@ -36,6 +36,9 @@ keeps the raw timings, output text, reference, and input filename.
 - Loaded/peak RSS: the isolated worker's resident memory after load / process
   high-water mark. This is not all application memory, GPU allocation, or model
   file size. Current RSS is implemented on macOS; other platforms report zero.
+- CPU: user+system CPU time of the model process (the worker subprocess for Qwen
+  and Nemotron) divided by wall time over the three warm runs; 100% is one core.
+  GPU time (Whisper on Metal, Qwen on MLX) is not included.
 - Entire benchmark: native command wall time, including process startup, input
   serialization, load, and all four transcriptions. Audio decoding is excluded.
 
@@ -78,7 +81,7 @@ Native local-app picker selection, deletion, and verified download were exercise
 
 ## Additional dictation choices (local development)
 
-Settings → Dictation now also offers **Whisper Turbo Q5** and **Qwen3-ASR 0.6B 4-bit**, alongside Base and Parakeet. Turbo is visible in debug builds; Qwen is visible in Apple-silicon macOS debug builds. Release registries omit these two experimental choices. The standard verified downloader, selection persistence, and removal controls are reused.
+Settings → Dictation now also offers **Whisper Turbo Q5** and **Qwen3-ASR 0.6B 4-bit**, alongside Base and Parakeet. Turbo is visible in every build; Qwen in Apple-silicon macOS builds (its Python runtime is not bundled yet; see backlog/report). The standard verified downloader, selection persistence, and removal controls are reused.
 
 Run `bun run dev:asr` to prepare both workers and launch the isolated dev app. Qwen setup uses `uv` and a dedicated Python 3.12 environment in `src-tauri/target/qwen-runtime`, with MLX Audio 0.5.6 / MLX 0.32.2. It does not use a system Python environment or depend on the benchmark output folder. Qwen runs with Hugging Face and Transformers offline flags after explicit model download. No audio leaves the machine. Its weights and tokenizer files are revision-pinned with SHA-256 verification in `models.json`.
 
@@ -90,11 +93,25 @@ Verification: the real pipeline integration test now switches Parakeet → Base 
 
 ### Install the experiment locally
 
-For an optimized, signed local app with the experimental choices and measured ratings enabled:
+For an optimized, signed local app (Turbo, Qwen and the ratings are in every build; Qwen needs the local runtime):
 
 ```sh
 bash scripts/setup-qwen-runtime.sh
-TUCKY_LOCAL_ASR=1 VITE_LOCAL_ASR=1 bash reinstall.command
+bash reinstall.command
 ```
 
-The Rust flag opts the two experimental models into this build; the Vite flag includes the ratings. Normal release builds still omit them. Qwen uses this checkout's `src-tauri/target/qwen-runtime`; retain that runtime folder while testing this local installation. Installation preserves the regular app's data, models, and permissions.
+Qwen uses this checkout's `src-tauri/target/qwen-runtime`; retain that runtime folder while testing this local installation. Installation preserves the regular app's data, models, and permissions.
+
+## Headless benchmark over many clips
+
+`bash scripts/bench-asr.sh <clips-dir> [--models a,b] [--out dir] [--model-path id=path]`
+drives the same worker without the UI. `<clips-dir>` is searched recursively for
+`name.wav` (16 kHz mono PCM16, at most 60 s) with a sibling `name.txt` reference.
+It prints per-clip and aggregate results (words, errors, WER %, summed warm time,
+RTF = warm time / audio time, median load, peak RSS, CPU %) and writes
+`results.json` plus per-run worker stderr logs (Metal/whisper init lines) to
+`--out` (default `output/asr-bench`). Models come from
+`~/Library/Application Support/Tucky/models` (`TUCKY_MODELS_DIR` overrides). Missing
+models or runtimes are reported as skipped and never downloaded. Drop a larger
+clip set in the directory to rerun. Timings are noisy when other builds share
+the machine; repeat and compare.

@@ -72,12 +72,15 @@ fn parse() -> Vec<ModelEntry> {
         .models
         .into_iter()
         .filter(|model| match model.id.as_str() {
-            "whisper-turbo" => cfg!(any(debug_assertions, tucky_local_asr)),
-            "qwen3-asr" => cfg!(all(
-                any(debug_assertions, tucky_local_asr),
-                target_os = "macos",
-                target_arch = "aarch64"
-            )),
+            // Debug builds only: release doesn't bundle tucky-nemotron (new, unbenchmarked).
+            "nemotron-3.5-streaming" => cfg!(debug_assertions),
+            // Hidden in release until the Python/MLX runtime is bundled: engine.rs
+            // load_qwen runs CARGO_MANIFEST_DIR/target/qwen-runtime/bin/python, which
+            // tauri.conf.json does not ship, so it would fail for every user. Dev only,
+            // and arm64 Mac only (MLX). See docs/backlog.md.
+            "qwen3-asr" => {
+                cfg!(all(debug_assertions, target_os = "macos", target_arch = "aarch64"))
+            }
             _ => true,
         })
         .collect()
@@ -141,17 +144,16 @@ mod tests {
     }
 
     #[test]
-    fn experimental_models_have_verified_downloads_and_are_dev_only() {
-        assert_eq!(lookup("whisper-turbo").is_some(), cfg!(any(debug_assertions, tucky_local_asr)));
+    fn extra_models_are_listed_in_every_build_and_have_verified_downloads() {
+        // whisper-turbo ships to everyone; qwen3-asr is debug + Apple silicon only
+        // until its Python runtime is bundled.
+        assert!(lookup("whisper-turbo").is_some());
         assert_eq!(
             lookup("qwen3-asr").is_some(),
-            cfg!(all(
-                any(debug_assertions, tucky_local_asr),
-                target_os = "macos",
-                target_arch = "aarch64"
-            ))
+            cfg!(all(debug_assertions, target_os = "macos", target_arch = "aarch64"))
         );
-        for id in ["whisper-turbo", "qwen3-asr"] {
+        assert_eq!(lookup("nemotron-3.5-streaming").is_some(), cfg!(debug_assertions));
+        for id in ["whisper-turbo", "qwen3-asr", "nemotron-3.5-streaming"] {
             if let Some(model) = lookup(id) {
                 assert_eq!(
                     model.size_bytes,
@@ -162,6 +164,24 @@ mod tests {
                     .iter()
                     .all(|f| f.sha256.len() == 64 && !f.url.contains("/main/")));
             }
+        }
+    }
+
+    #[test]
+    fn nemotron_is_dev_gated_with_pinned_sherpa_files() {
+        assert_eq!(
+            lookup("nemotron-3.5-streaming").is_some(),
+            cfg!(debug_assertions)
+        );
+        if let Some(model) = lookup("nemotron-3.5-streaming") {
+            assert!(is_supported(model) && !model.is_default && !model.english_only);
+            let names: Vec<_> = model.files.iter().map(|f| f.name.as_str()).collect();
+            assert_eq!(
+                names,
+                ["encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt"]
+            );
+            assert_eq!(model.supported_languages.len(), 15);
+            assert!(model.files.iter().all(|f| f.url.contains("/resolve/cba1c96c")));
         }
     }
 

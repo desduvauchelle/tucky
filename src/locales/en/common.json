@@ -803,6 +803,7 @@
       "useThisModel": "Use this model",
       "download": "Download",
       "incompleteDownload": "Incomplete download · {{size}} on disk",
+      "cpuAverage": "{{percent}}% CPU",
       "remove": "Remove",
       "retrying": "Connection interrupted — retrying…"
     }

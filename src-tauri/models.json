@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_comment": "Speech recognition model registry. Each entry produces one card in the SpeechModelPicker. version_label / description / language_label / english_only / accuracy_bars / speed_bars drive the card's visual presentation; size_label is the historical Small/Medium/Large bucket. Parakeet uses ONNX; Whisper uses an isolated whisper.cpp worker. Turbo and Qwen are local development options.",
+  "_comment": "Speech recognition model registry. Each entry produces one card in the SpeechModelPicker. version_label / description / language_label / english_only / accuracy_bars / speed_bars drive the card's visual presentation; size_label is the historical Small/Medium/Large bucket. Parakeet uses ONNX; Whisper uses an isolated whisper.cpp worker. Turbo and Qwen are standard options (Qwen on Apple silicon only).",
   "models": [
     {
       "id": "parakeet-v3",
@@ -152,7 +152,64 @@
       "language_label": "Multilingual \u00b7 automatic detection",
       "supported_languages": ["zh", "en", "yue", "ar", "de", "fr", "es", "pt", "id", "it", "ko", "ru", "th", "vi", "ja", "tr", "hi", "ms", "nl", "sv", "da", "fi", "pl", "cs", "fil", "fa", "el", "hu", "mk", "ro"],
       "english_only": false,
-      "notes": "Local development only. MLX Audio 0.5.6. Segment times represent audio chunks, not word alignment. Model revision and hashes match the personal voice benchmark."
+      "notes": "Apple silicon only. MLX Audio 0.5.6. Segment times represent audio chunks, not word alignment. Model revision and hashes match the personal voice benchmark."
+    },
+    {
+      "id": "nemotron-3.5-streaming",
+      "display_name": "Nemotron 3.5 Streaming (0.6B)",
+      "version_label": "0.6B · int8",
+      "description": "NVIDIA cache-aware streaming model · dev only",
+      "language_label": "15 languages · automatic detection",
+      "supported_languages": [
+        "en",
+        "es",
+        "fr",
+        "it",
+        "pt",
+        "nl",
+        "de",
+        "tr",
+        "ru",
+        "ar",
+        "hi",
+        "ja",
+        "ko",
+        "vi",
+        "uk"
+      ],
+      "english_only": false,
+      "accuracy_bars": 4,
+      "speed_bars": 4,
+      "size_label": "Medium",
+      "size_bytes": 682215474,
+      "is_default": false,
+      "files": [
+        {
+          "name": "encoder.int8.onnx",
+          "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-1120ms-int8-2026-06-11/resolve/cba1c96ca5ef0e8393b50584ae153a79145dc492/encoder.int8.onnx",
+          "sha256": "2fff2166acaa535bd969fb223c1f0783d71029f143cb298bc54c2afe85abf772",
+          "size_bytes": 657601521
+        },
+        {
+          "name": "decoder.int8.onnx",
+          "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-1120ms-int8-2026-06-11/resolve/cba1c96ca5ef0e8393b50584ae153a79145dc492/decoder.int8.onnx",
+          "sha256": "19f9c98fc6d0a2c33a65a43b36fdb2e914c26c0aa9764be3aebc502a1e982fb0",
+          "size_bytes": 14978075
+        },
+        {
+          "name": "joiner.int8.onnx",
+          "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-1120ms-int8-2026-06-11/resolve/cba1c96ca5ef0e8393b50584ae153a79145dc492/joiner.int8.onnx",
+          "sha256": "4101c7c679a0bc30483794b27a059e34e79232aa2068d78d51231a22c8b0d7ce",
+          "size_bytes": 9504438
+        },
+        {
+          "name": "tokens.txt",
+          "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-1120ms-int8-2026-06-11/resolve/cba1c96ca5ef0e8393b50584ae153a79145dc492/tokens.txt",
+          "sha256": "729cc103155bafa785f9cd45746cd41cabe97eab7182fc04d594129587958f8a",
+          "size_bytes": 131440
+        }
+      ],
+      "notes": "Local development only. NVIDIA nemotron-3.5-asr-streaming-0.6b (cache-aware FastConformer-RNNT) exported for sherpa-onnx by csukuangfj2, int8, 1120 ms chunks; runs in the tucky-nemotron worker (built by scripts/build-nemotron-worker.sh) because sherpa-onnx's bundled ONNX Runtime cannot share a process with ort. Model card FLEURS avg WER 8.84% (language given) / 9.21% (auto-detect) at 1.12 s chunks across 19 locales. URLs pin HF revision cba1c96c; sha256 = HF LFS oids, verified against the official GitHub asr-models archive. Batch transcription only, auto language detection, no segment timestamps."
     }
   ]
 }

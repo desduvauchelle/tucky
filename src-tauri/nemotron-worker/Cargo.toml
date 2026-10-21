@@ -1,0 +1,12 @@
+[package]
+name = "tucky-nemotron"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Isolated from the main app on purpose: sherpa-onnx statically bundles its own
+# ONNX Runtime (1.24), which collides with the `ort` runtime transcribe-rs links
+# into Tucky ("requested API version [28] is not available" at load time).
+[dependencies]
+sherpa-onnx = "=1.13.8"
+serde_json = "1"

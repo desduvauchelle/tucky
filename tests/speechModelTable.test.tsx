@@ -40,15 +40,13 @@ test("undownloaded and downloading rows expose the appropriate action", () => {
   expect(downloading).not.toContain('Use this model');
 });
 test("rows use table semantics and show comparable measured values", () => {
-  const previous = process.env.VITE_LOCAL_ASR;
-  process.env.VITE_LOCAL_ASR = "1";
   const html = row();
-  if (previous === undefined) delete process.env.VITE_LOCAL_ASR;
-  else process.env.VITE_LOCAL_ASR = previous;
   expect(html).toContain('scope="row"');
-  expect(html).toContain('20.8% word errors');
-  expect(html).toContain('0.19 s transcription');
-  expect(html).toContain('0.38 GiB peak');
-  expect(benchmarkGrade('errors', 8)).toBe(4);
-  expect(benchmarkGrade('memoryGiB', 0.38)).toBe(5);
+  expect(html).toContain('3.7% word errors');
+  expect(html).toContain('75× real time');
+  expect(html).toContain('0.36 GiB peak');
+  expect(html).toContain('93% CPU');
+  expect(benchmarkGrade('errors', 19)).toBe(3);
+  expect(benchmarkGrade('memoryGiB', 0.36)).toBe(5);
+  expect(benchmarkGrade('cpuPercent', 467)).toBe(2);
 });

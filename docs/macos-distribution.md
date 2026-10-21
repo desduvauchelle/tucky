@@ -59,9 +59,9 @@ updater protocol or publish anything.
 
 If there are multiple Developer ID certificates, set `APPLE_SIGNING_IDENTITY`
 to the full certificate name. Set `TUCKY_NOTARY_PROFILE` to use a different
-Keychain profile. Local speech models and benchmark UI remain enabled by
-default, matching `reinstall.command`; set both `TUCKY_LOCAL_ASR=0` and
-`VITE_LOCAL_ASR=0` for the standard catalog.
+Keychain profile. Whisper Large v3 Turbo, Qwen3-ASR (Apple silicon only) and
+the benchmark ratings ship in every build; no build flag is involved. Nemotron
+stays debug-only.
 
 Local builds use the installed Apple Development certificate instead of the
 old unavailable self-signed identity. This is for development only; the
