@@ -1,0 +1,8 @@
+node_modules/
+out/
+stems/
+*.mp4
+*.wav
+npm-install.log
+.env
+.env.*
