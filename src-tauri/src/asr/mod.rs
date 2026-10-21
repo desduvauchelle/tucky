@@ -4,6 +4,7 @@
 
 pub mod captions;
 pub mod downloader;
+pub mod hallucination;
 mod engine;
 pub mod parakeet;
 pub mod pipeline;
