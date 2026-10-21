@@ -2,6 +2,8 @@
   "overlay": {
     "iconThinkingAlt": "Elaborazione",
     "iconTranscribingAlt": "Trascrizione",
+    "moveHint": "Trascinami · rilascia per salvare",
+    "moveHint": "Trascinami · rilascia per salvare",
     "iconRecordingAlt": "Registrazione",
     "takingNotes": "Prendo appunti…",
     "transcribing": "Trascrizione…",

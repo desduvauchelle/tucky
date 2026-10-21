@@ -2,6 +2,8 @@
   "overlay": {
     "iconThinkingAlt": "Aan het denken",
     "iconTranscribingAlt": "Transcriberen",
+    "moveHint": "Sleep mij · loslaten om op te slaan",
+    "moveHint": "Sleep mij · loslaten om op te slaan",
     "iconRecordingAlt": "Opnemen",
     "takingNotes": "Notities maken…",
     "transcribing": "Transcriberen…",

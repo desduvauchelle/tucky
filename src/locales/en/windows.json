@@ -2,6 +2,8 @@
   "overlay": {
     "iconThinkingAlt": "Thinking",
     "iconTranscribingAlt": "Transcribing",
+    "moveHint": "Drag me · release to save",
+    "moveHint": "Drag me · release to save",
     "iconRecordingAlt": "Recording",
     "wakeListening": "I’m listening…",
     "takingNotes": "Taking notes…",

@@ -12,9 +12,11 @@ type OverlayState =
   | "meeting"
   | "action-recording"
   | "wake-recording"
-  | "processing";
+  | "processing"
+  | "move";
 
 type MeetingOverlayPayload = { mode: "meeting"; app_name: string | null };
+type MoveOverlayPayload = { mode: "move" };
 type ProcessingOverlayPayload = { mode: "processing"; label: string };
 
 const TranscriptIcon: React.FC = () => (
@@ -73,8 +75,11 @@ const RecordingOverlay: React.FC = () => {
           setState(payload as OverlayState);
           setMeetingAppName(null);
         } else if (payload && typeof payload === "object" && "mode" in payload) {
-          const obj = payload as MeetingOverlayPayload | ProcessingOverlayPayload;
-          if (obj.mode === "processing") {
+          const obj = payload as MeetingOverlayPayload | ProcessingOverlayPayload | MoveOverlayPayload;
+          if (obj.mode === "move") {
+            setState("move");
+            setMeetingAppName(null);
+          } else if (obj.mode === "processing") {
             const proc = obj as ProcessingOverlayPayload;
             setState("processing");
             setProcessingLabel(proc.label || t("overlay.processingDefault"));
@@ -116,6 +121,7 @@ const RecordingOverlay: React.FC = () => {
   const isRecording = state === "recording" || state === "log-recording" || state === "action-recording" || isWakeListening;
   const isMeeting = state === "meeting";
   const isProcessing = state === "processing";
+  const isMove = state === "move";
 
   const face = isMeeting ? "meeting" : isProcessing || state === "transcribing" ? "thinking" : "listening";
   const drag = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -124,7 +130,7 @@ const RecordingOverlay: React.FC = () => {
   };
 
   return (
-    <BubbleSurface as="div" variant="pill" onMouseDown={drag} className={`recording-overlay ${isVisible ? "fade-in" : ""} ${isRecording ? "recording-mode" : ""} ${isWakeListening ? "wake-mode" : ""} ${state === "log-recording" ? "log-mode" : ""} ${isMeeting ? "meeting-mode" : ""} ${state === "action-recording" ? "action-mode" : ""} ${isProcessing ? "processing-mode" : ""}`}>
+    <BubbleSurface as="div" variant="pill" onMouseDown={drag} className={`recording-overlay ${isVisible ? "fade-in" : ""} ${isRecording ? "recording-mode" : ""} ${isWakeListening ? "wake-mode" : ""} ${state === "log-recording" ? "log-mode" : ""} ${isMeeting ? "meeting-mode" : ""} ${state === "action-recording" ? "action-mode" : ""} ${isProcessing ? "processing-mode" : ""} ${isMove ? "move-mode" : ""}`}>
       <div className={`overlay-left face-${face}`}>
         <img className="tucky-face" src={`/mascot/${face}.png`} alt="Tucky" draggable={false} />
         <span className="activity-dot" aria-hidden="true" />
@@ -156,6 +162,11 @@ const RecordingOverlay: React.FC = () => {
         {isProcessing && (
           <div className="status-text" role="status" aria-live="polite">
             {processingLabel}
+          </div>
+        )}
+        {isMove && (
+          <div className="status-text" role="status" aria-live="polite">
+            {t("overlay.moveHint")}
           </div>
         )}
         {isMeeting && (

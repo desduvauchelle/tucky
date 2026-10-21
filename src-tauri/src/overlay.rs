@@ -298,6 +298,12 @@ pub fn create_recording_overlay(app_handle: &AppHandle<Wry>) {
     {
         Ok(window) => {
             debug!("recording overlay window created (hidden)");
+            {
+                let app = app_handle.clone();
+                window.on_window_event(move |event| {
+                    if matches!(event, tauri::WindowEvent::Moved(_)) { on_pill_moved(&app); }
+                });
+            }
             // Check even without a move event: unplugging a display does not
             // reliably move its windows. Wait for a settled position so a drag
             // can cross the gap between displays without snapping back.
@@ -411,6 +417,221 @@ pub(crate) fn recenter_recording_overlay(app: &AppHandle<Wry>) -> Result<(), Str
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// Pill placement: saved position + "move mode" (tray: Recording pill position)
+// ---------------------------------------------------------------------------
+
+/// Gap between the top of the usable area (below the menu bar) and the pill.
+const OVERLAY_TOP_OFFSET: f64 = 12.0;
+/// A drag counts as finished once the window has not moved for this long.
+const PILL_MOVE_SETTLE_MS: u64 = 500;
+/// Moved events this soon after entering move mode are our own positioning.
+const PILL_MOVE_ARM_MS: u64 = 800;
+/// Move mode gives up (without saving) if the user never drags.
+const PILL_MOVE_TIMEOUT_SECS: u64 = 60;
+
+static PILL_MOVE_MODE: AtomicBool = AtomicBool::new(false);
+static PILL_MOVE_GEN: AtomicU32 = AtomicU32::new(0);
+static PILL_MOVE_SESSION: AtomicU32 = AtomicU32::new(0);
+static PILL_MOVE_ENTERED: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+
+fn top_center_overlay_position(area: (i32, i32, u32, u32), size: (u32, u32), scale: f64) -> (i32, i32) {
+    let (ax, ay, aw) = (i64::from(area.0), i64::from(area.1), i64::from(area.2));
+    let w = i64::from(size.0);
+    let gap = (OVERLAY_TOP_OFFSET * scale).round() as i64;
+    ((ax + (aw - w).max(0) / 2) as i32, (ay + gap) as i32)
+}
+
+/// Physical top-left for a preset ("bottom" | "top") on the pill's current
+/// monitor, falling back to the primary one.
+fn preset_overlay_position(
+    app: &AppHandle<Wry>,
+    window: &tauri::WebviewWindow<Wry>,
+    preset: &str,
+) -> Result<(i32, i32), String> {
+    let monitor = window.current_monitor().map_err(|e| e.to_string())?
+        .or(app.primary_monitor().map_err(|e| e.to_string())?)
+        .ok_or("No display is available")?;
+    let area = monitor.work_area();
+    let size = window.outer_size().map_err(|e| e.to_string())?;
+    let area = (area.position.x, area.position.y, area.size.width, area.size.height);
+    let size = (size.width, size.height);
+    Ok(if preset == "top" {
+        top_center_overlay_position(area, size, monitor.scale_factor())
+    } else {
+        bottom_center_overlay_position(area, size, monitor.scale_factor())
+    })
+}
+
+fn pet_is_visible(app: &AppHandle<Wry>) -> bool {
+    app.get_webview_window("desktop_pet").is_some_and(|pet| pet.is_visible().unwrap_or(false))
+}
+
+/// Move the (hidden) pill to the saved position. Off-screen or unreadable
+/// saved positions fall back to bottom centre, loudly in the log.
+fn apply_saved_overlay_position(app: &AppHandle<Wry>, window: &tauri::WebviewWindow<Wry>) {
+    if pet_is_visible(app) { return; }
+    let saved = app.try_state::<crate::commands::AppState>().and_then(|s| s.settings.overlay_position());
+    let mode = saved.as_ref().and_then(|v| v.get("mode")).and_then(|v| v.as_str()).unwrap_or("bottom");
+    let mut label = mode.to_string();
+    let target: Result<(i32, i32), String> = if mode == "custom" {
+        let center = saved.as_ref().and_then(|v| {
+            Some((v.get("cx")?.as_i64()?, v.get("cy")?.as_i64()?))
+        });
+        match (center, window.outer_size(), window.available_monitors()) {
+            (Some((cx, cy)), Ok(size), Ok(monitors)) => {
+                let on_screen = monitors.iter().any(|m| {
+                    let a = m.work_area();
+                    cx >= i64::from(a.position.x) && cx < i64::from(a.position.x) + i64::from(a.size.width)
+                        && cy >= i64::from(a.position.y) && cy < i64::from(a.position.y) + i64::from(a.size.height)
+                });
+                if on_screen {
+                    Ok(((cx - i64::from(size.width) / 2) as i32, (cy - i64::from(size.height) / 2) as i32))
+                } else {
+                    warn!(target: "pill", cx, cy, "saved pill position is off-screen (monitor disconnected?); falling back to bottom centre");
+                    label = "bottom (fallback: off-screen)".into();
+                    preset_overlay_position(app, window, "bottom")
+                }
+            }
+            _ => {
+                warn!(target: "pill", ?saved, "saved custom pill position unreadable; falling back to bottom centre");
+                label = "bottom (fallback: unreadable)".into();
+                preset_overlay_position(app, window, "bottom")
+            }
+        }
+    } else {
+        preset_overlay_position(app, window, mode)
+    };
+    match target {
+        Ok((x, y)) => match window.set_position(tauri::PhysicalPosition::new(x, y)) {
+            Ok(()) => info!(target: "pill", x, y, mode = %label, "pill position applied"),
+            Err(e) => error!(target: "pill", %e, "failed to set pill position"),
+        },
+        Err(e) => error!(target: "pill", %e, "could not compute pill position"),
+    }
+}
+
+fn persist_overlay_position(app: &AppHandle<Wry>, value: serde_json::Value) -> Result<(), String> {
+    let state = app.try_state::<crate::commands::AppState>().ok_or("app state unavailable")?;
+    state.settings.set_overlay_position(value.clone()).map_err(|e| {
+        error!(target: "pill", %e, "failed to persist pill position");
+        e.to_string()
+    })?;
+    info!(target: "pill", position = %value, "pill position saved");
+    Ok(())
+}
+
+/// Tray: "Bottom center" / "Top center". Saves the preset and moves the pill.
+pub(crate) fn set_pill_preset(app: &AppHandle<Wry>, preset: &str) -> Result<(), String> {
+    finish_pill_move_mode(app, false, "preset chosen");
+    persist_overlay_position(app, serde_json::json!({ "mode": preset }))?;
+    let window = app.get_webview_window("recording_overlay").ok_or("The recording pill is unavailable")?;
+    if pet_is_visible(app) {
+        info!(target: "pill", preset, "preset saved; pet is visible so it applies once the pet is hidden");
+        return Ok(());
+    }
+    let (x, y) = preset_overlay_position(app, &window, preset)?;
+    window.set_position(tauri::PhysicalPosition::new(x, y)).map_err(|e| e.to_string())?;
+    if let Ok(mut previous) = PRE_PET_POSITION.lock() { *previous = None; }
+    info!(target: "pill", preset, x, y, "pill moved to preset");
+    Ok(())
+}
+
+/// Tray: "Move pill…". Shows the pill without a hotkey and lets the user drag
+/// it; the settled position is saved and the pill hides again.
+pub(crate) fn toggle_pill_move_mode(app: &AppHandle<Wry>) -> Result<(), String> {
+    if PILL_MOVE_MODE.load(Ordering::SeqCst) {
+        finish_pill_move_mode(app, false, "cancelled from tray");
+        return Ok(());
+    }
+    if pet_is_visible(app) {
+        return Err("Hide the pet first to move the standalone pill".into());
+    }
+    if OVERLAY_PRESENTATION.load(Ordering::SeqCst) != 0 {
+        return Err("The pill is in use by a recording".into());
+    }
+    let window = app.get_webview_window("recording_overlay").ok_or("The recording pill is unavailable")?;
+    PILL_MOVE_MODE.store(true, Ordering::SeqCst);
+    let session = PILL_MOVE_SESSION.fetch_add(1, Ordering::SeqCst) + 1;
+    PILL_MOVE_GEN.fetch_add(1, Ordering::SeqCst);
+    if let Ok(mut entered) = PILL_MOVE_ENTERED.lock() { *entered = Some(std::time::Instant::now()); }
+    RECORDING_OVERLAY_REVISION.fetch_add(1, Ordering::SeqCst);
+    resize_overlay_around_center(&window, STATUS_OVERLAY_WIDTH, STATUS_OVERLAY_HEIGHT);
+    apply_saved_overlay_position(app, &window);
+    keep_recording_overlay_visible(&window);
+    // The pill normally takes clicks; make sure nothing left it click-through.
+    if let Err(e) = window.set_ignore_cursor_events(false) {
+        warn!(target: "pill", %e, "set_ignore_cursor_events(false) failed in move mode");
+    }
+    if let Err(e) = window.show() {
+        PILL_MOVE_MODE.store(false, Ordering::SeqCst);
+        return Err(format!("could not show pill: {e}"));
+    }
+    let _ = window.set_always_on_top(true);
+    let _ = window.emit("show-overlay", serde_json::json!({ "mode": "move" }));
+    info!(target: "pill", "move mode entered");
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(PILL_MOVE_TIMEOUT_SECS));
+        if PILL_MOVE_MODE.load(Ordering::SeqCst) && PILL_MOVE_SESSION.load(Ordering::SeqCst) == session {
+            finish_pill_move_mode(&app, false, "timed out without a drag");
+        }
+    });
+    Ok(())
+}
+
+/// Leave move mode. `save` persists the pill's current centre. When `hide` is
+/// false the caller (a recording starting) takes over the visible pill.
+fn leave_pill_move_mode(app: &AppHandle<Wry>, save: bool, hide: bool, why: &str) {
+    if !PILL_MOVE_MODE.swap(false, Ordering::SeqCst) { return; }
+    PILL_MOVE_GEN.fetch_add(1, Ordering::SeqCst);
+    if save {
+        if let Some(window) = app.get_webview_window("recording_overlay") {
+            match (window.outer_position(), window.outer_size()) {
+                (Ok(p), Ok(s)) => {
+                    let cx = i64::from(p.x) + i64::from(s.width) / 2;
+                    let cy = i64::from(p.y) + i64::from(s.height) / 2;
+                    if let Err(e) = persist_overlay_position(app, serde_json::json!({ "mode": "custom", "cx": cx, "cy": cy })) {
+                        let _ = app.emit("asr:error", "Could not save the pill position. See Settings \u{2192} Diagnostics \u{2192} logs for details.");
+                        warn!(target: "pill", %e, "pill position not saved");
+                    }
+                }
+                (p, s) => {
+                    error!(target: "pill", ?p, ?s, "could not read pill geometry to save position");
+                    let _ = app.emit("asr:error", "Could not save the pill position. See Settings \u{2192} Diagnostics \u{2192} logs for details.");
+                }
+            }
+        }
+    }
+    info!(target: "pill", why, save, hide, "move mode exited");
+    if hide { hide_recording_overlay(app); }
+}
+
+fn finish_pill_move_mode(app: &AppHandle<Wry>, save: bool, why: &str) {
+    leave_pill_move_mode(app, save, true, why);
+}
+
+/// A real recording/status took over the pill: keep whatever the user dragged.
+fn exit_pill_move_mode_for_activity(app: &AppHandle<Wry>) {
+    leave_pill_move_mode(app, true, false, "recording started");
+}
+
+/// Window `Moved` handler: debounce, then save once the drag settles.
+fn on_pill_moved(app: &AppHandle<Wry>) {
+    if !PILL_MOVE_MODE.load(Ordering::SeqCst) { return; }
+    let armed = PILL_MOVE_ENTERED.lock().ok().and_then(|e| *e)
+        .is_some_and(|t| t.elapsed() >= std::time::Duration::from_millis(PILL_MOVE_ARM_MS));
+    if !armed { return; }
+    let generation = PILL_MOVE_GEN.fetch_add(1, Ordering::SeqCst) + 1;
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(PILL_MOVE_SETTLE_MS));
+        if PILL_MOVE_GEN.load(Ordering::SeqCst) == generation {
+            finish_pill_move_mode(&app, true, "drag settled");
+        }
+    });
+}
+
 /// Physical coordinates throughout: never mix logical origins from displays
 /// with different scale factors.
 fn recovered_overlay_position(
@@ -495,6 +716,12 @@ mod recording_overlay_position_tests {
     }
 
     #[test]
+    fn top_center_sits_below_menu_bar_gap() {
+        assert_eq!(super::top_center_overlay_position((0, 24, 1920, 976), (240, 64), 1.0), (840, 36));
+        assert_eq!(super::top_center_overlay_position((0, 48, 2880, 1700), (480, 128), 2.0), (1200, 72));
+    }
+
+    #[test]
     fn preserves_secondary_display_and_negative_coordinates() {
         assert_eq!(
             recover(
@@ -552,9 +779,11 @@ fn show_overlay_state(app_handle: &AppHandle<Wry>, state: &str) {
     WAKE_REQUEST_PRESENTATION.store(state == "wake-recording", Ordering::SeqCst);
     OVERLAY_PRESENTATION.store(1, Ordering::SeqCst);
     RECORDING_OVERLAY_REVISION.fetch_add(1, Ordering::SeqCst);
+    exit_pill_move_mode_for_activity(app_handle);
     if let Some(overlay) = app_handle.get_webview_window("recording_overlay") {
         let width = if state == "wake-recording" { STATUS_OVERLAY_WIDTH } else { OVERLAY_WIDTH };
         resize_overlay_around_center(&overlay, width, OVERLAY_HEIGHT);
+        if !overlay.is_visible().unwrap_or(false) { apply_saved_overlay_position(app_handle, &overlay); }
         keep_recording_overlay_visible(&overlay);
         // The overlay must never become the key window — if it does, Cmd+V
         // lands here instead of the user's target app. On macOS, showing a
@@ -571,8 +800,10 @@ fn show_overlay_state(app_handle: &AppHandle<Wry>, state: &str) {
 fn show_status_overlay_state(app_handle: &AppHandle<Wry>, state: &str) {
     OVERLAY_PRESENTATION.store(2, Ordering::SeqCst);
     RECORDING_OVERLAY_REVISION.fetch_add(1, Ordering::SeqCst);
+    exit_pill_move_mode_for_activity(app_handle);
     if let Some(overlay) = app_handle.get_webview_window("recording_overlay") {
         resize_overlay_around_center(&overlay, STATUS_OVERLAY_WIDTH, STATUS_OVERLAY_HEIGHT);
+        if !overlay.is_visible().unwrap_or(false) { apply_saved_overlay_position(app_handle, &overlay); }
         keep_recording_overlay_visible(&overlay);
         let _ = overlay.set_always_on_top(true);
         let _ = overlay.emit("show-overlay", state);
@@ -588,8 +819,10 @@ pub fn show_meeting_overlay(app_handle: &AppHandle<Wry>, detected_app_name: Opti
     WAKE_REQUEST_PRESENTATION.store(false, Ordering::SeqCst);
     OVERLAY_PRESENTATION.store(3, Ordering::SeqCst);
     RECORDING_OVERLAY_REVISION.fetch_add(1, Ordering::SeqCst);
+    exit_pill_move_mode_for_activity(app_handle);
     if let Some(overlay) = app_handle.get_webview_window("recording_overlay") {
         resize_overlay_around_center(&overlay, MEETING_OVERLAY_WIDTH, STATUS_OVERLAY_HEIGHT);
+        if !overlay.is_visible().unwrap_or(false) { apply_saved_overlay_position(app_handle, &overlay); }
         keep_recording_overlay_visible(&overlay);
         let _ = overlay.set_always_on_top(true);
         let _ = overlay.emit(
@@ -638,8 +871,10 @@ pub fn show_transcribing_overlay(app_handle: &AppHandle<Wry>) {
 pub fn show_processing_overlay(app_handle: &AppHandle<Wry>, label: &str) {
     OVERLAY_PRESENTATION.store(2, Ordering::SeqCst);
     RECORDING_OVERLAY_REVISION.fetch_add(1, Ordering::SeqCst);
+    exit_pill_move_mode_for_activity(app_handle);
     if let Some(overlay) = app_handle.get_webview_window("recording_overlay") {
         resize_overlay_around_center(&overlay, STATUS_OVERLAY_WIDTH, STATUS_OVERLAY_HEIGHT);
+        if !overlay.is_visible().unwrap_or(false) { apply_saved_overlay_position(app_handle, &overlay); }
         keep_recording_overlay_visible(&overlay);
         let _ = overlay.set_always_on_top(true);
         let _ = overlay.emit(
@@ -656,6 +891,7 @@ pub fn show_processing_overlay(app_handle: &AppHandle<Wry>, label: &str) {
 
 /// Hides the overlay with a fade-out delay so the CSS animation can play.
 pub fn hide_recording_overlay(app_handle: &AppHandle<Wry>) {
+    if PILL_MOVE_MODE.load(Ordering::SeqCst) { return; } // move mode owns the pill
     OVERLAY_PRESENTATION.store(0, Ordering::SeqCst);
     hide_activity_bubble(app_handle);
     let revision = RECORDING_OVERLAY_REVISION.fetch_add(1, Ordering::SeqCst) + 1;
@@ -678,6 +914,7 @@ pub fn hide_recording_overlay(app_handle: &AppHandle<Wry>) {
 /// Used before pasting so the always-on-top overlay doesn't interfere
 /// with focus restore and Cmd+V delivery to the target app.
 pub fn hide_recording_overlay_now(app_handle: &AppHandle<Wry>) {
+    if PILL_MOVE_MODE.load(Ordering::SeqCst) { return; } // move mode owns the pill
     OVERLAY_PRESENTATION.store(0, Ordering::SeqCst);
     hide_activity_bubble(app_handle);
     RECORDING_OVERLAY_REVISION.fetch_add(1, Ordering::SeqCst);

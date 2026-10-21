@@ -320,6 +320,7 @@ enum MenuEntry {
     KeepAwake,
     WakeWord,
     DesktopPet,
+    PillPosition,
     Settings,
     Quit,
 }
@@ -360,6 +361,7 @@ fn menu_plan(s: &MenuState) -> Vec<MenuEntry> {
         plan.push(MenuEntry::KeepAwake);
     }
     plan.push(MenuEntry::DesktopPet);
+    plan.push(MenuEntry::PillPosition);
     plan.push(MenuEntry::Settings);
     plan.push(MenuEntry::Separator);
     plan.push(MenuEntry::Quit);
@@ -490,6 +492,18 @@ fn build_menu<R: Runtime>(
                     .and_then(|w| w.is_visible().ok()).unwrap_or(false),
                 None::<&str>,
             )?)),
+            MenuEntry::PillPosition => {
+                let bottom = MenuItem::with_id(app, "pill_pos:bottom", "Bottom center", true, None::<&str>)?;
+                let top = MenuItem::with_id(app, "pill_pos:top", "Top center", true, None::<&str>)?;
+                let mv = MenuItem::with_id(app, "pill_pos:move", "Move pill\u{2026}", true, None::<&str>)?;
+                items.push(Box::new(Submenu::with_id_and_items(
+                    app,
+                    "pill_position",
+                    "Recording pill position",
+                    true,
+                    &[&bottom, &top, &mv],
+                )?));
+            }
             MenuEntry::Settings => items.push(Box::new(MenuItem::with_id(
                 app,
                 "settings",
@@ -595,6 +609,22 @@ impl TrayHandle<Wry> {
                         if let Ok(tray) = app.state::<AppState>().tray.lock() {
                             tray.rebuild_menu();
                         };
+                    });
+                }
+                id if id.starts_with("pill_pos:") => {
+                    let kind = id.trim_start_matches("pill_pos:").to_string();
+                    let app = app_for_handler.clone();
+                    std::thread::spawn(move || {
+                        let result = match kind.as_str() {
+                            "bottom" => crate::overlay::set_pill_preset(&app, "bottom"),
+                            "top" => crate::overlay::set_pill_preset(&app, "top"),
+                            "move" => crate::overlay::toggle_pill_move_mode(&app),
+                            other => Err(format!("unknown pill position '{other}'")),
+                        };
+                        if let Err(e) = result {
+                            tracing::warn!(target: "pill", %e, kind, "tray pill position action failed");
+                            let _ = app.emit("asr:error", "Could not move the recording pill. See Settings \u{2192} Diagnostics \u{2192} logs for details.");
+                        }
                     });
                 }
                 "settings" => {

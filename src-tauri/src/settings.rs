@@ -549,6 +549,18 @@ impl SettingsStore {
         self.store.save().map_err(|e| SettingsError::Store(e.to_string()))
     }
 
+    /// Saved recording-pill placement: `{"mode":"bottom"|"top"}` or
+    /// `{"mode":"custom","cx":i32,"cy":i32}` (physical centre of the pill).
+    /// `None` means the default (bottom centre).
+    pub fn overlay_position(&self) -> Option<serde_json::Value> {
+        self.store.get("overlay_position").filter(|v| v.is_object())
+    }
+
+    pub fn set_overlay_position(&self, value: serde_json::Value) -> Result<(), SettingsError> {
+        self.store.set("overlay_position", value);
+        self.store.save().map_err(|e| SettingsError::Store(e.to_string()))
+    }
+
     /// Whether system audio should be muted while recording. Defaults to `false`.
     pub fn mute_while_recording(&self) -> bool {
         self.store

@@ -2,6 +2,8 @@
   "overlay": {
     "iconThinkingAlt": "Myślenie",
     "iconTranscribingAlt": "Transkrybowanie",
+    "moveHint": "Przeciągnij mnie · puść, aby zapisać",
+    "moveHint": "Przeciągnij mnie · puść, aby zapisać",
     "iconRecordingAlt": "Nagrywanie",
     "takingNotes": "Robię notatki…",
     "transcribing": "Transkrybowanie…",
