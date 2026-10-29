@@ -1,7 +1,10 @@
 import type { Page } from "@playwright/test";
+import type { RecordingRow } from "../src/lib/api";
 
 /** Knobs describing the simulated machine state at app boot. */
 export type Scenario = {
+  recordings?: RecordingRow[];
+  recordingDeleteErrors?: Record<string, string>;
   permissions?: Partial<{
     microphone: boolean;
     accessibility: boolean;
@@ -118,6 +121,7 @@ export async function installTauriMock(page: Page, scenario: Scenario = {}) {
       companies: [...(sc.companies ?? [])],
       debriefs: JSON.parse(JSON.stringify(sc.debriefs ?? [])) as NonNullable<typeof sc.debriefs>,
       feedItems: JSON.parse(JSON.stringify(sc.feedItems ?? [])) as NonNullable<typeof sc.feedItems>,
+      recordings: [...(sc.recordings ?? [])],
       tasks: JSON.parse(JSON.stringify(sc.tasks ?? [])) as NonNullable<typeof sc.tasks>,
       dictionaryEntries: [...(sc.dictionaryEntries ?? [])],
       dailyFocusNotes: {
@@ -398,6 +402,11 @@ export async function installTauriMock(page: Page, scenario: Scenario = {}) {
         if (task) task.completed_at = null;
       },
       // Activity feed + Tasks view.
+      list_recordings: () => state.recordings.map((row) => ({ ...row })),
+      delete_recording: ({ id }) => {
+        if (sc.recordingDeleteErrors?.[id]) throw new Error(sc.recordingDeleteErrors[id]);
+        state.recordings = state.recordings.filter((row) => row.id !== id);
+      },
       list_items: (args: any) =>
         state.feedItems
           .filter(

@@ -14,6 +14,7 @@ type Props = {
   tasks?: Map<string, TaskWithItem>;
   /** Called after a task row is toggled or its deadline changes. */
   onTaskChanged?: () => void;
+  recordingSelection?: { checked: boolean; onToggle: () => void };
 };
 
 /** Shared dashboard-style rendering for activity entries. */
@@ -23,6 +24,7 @@ export default function ActivityLedgerEntry({
   hideProject,
   tasks,
   onTaskChanged,
+  recordingSelection,
 }: Props) {
   if (entry.type === "meeting") {
     return (
@@ -37,7 +39,7 @@ export default function ActivityLedgerEntry({
 
   if (entry.type === "recording") {
     return (
-      <RecordingCard rec={entry.rec} projects={projects} variant="ledger" />
+      <RecordingCard rec={entry.rec} projects={projects} variant="ledger" selection={recordingSelection} />
     );
   }
 

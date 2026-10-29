@@ -390,6 +390,25 @@
     }
   },
   "recordings": {
+    "selection": {
+      "start": "Select recordings",
+      "selectAll": "Select all",
+      "deselectAll": "Deselect all",
+      "count": "{{count}} selected",
+      "toggle": "Select recording: {{name}}",
+      "delete": "Delete selected",
+      "done": "Done",
+      "cancel": "Cancel",
+      "confirmTitle_one": "Delete {{count}} recording?",
+      "confirmTitle_other": "Delete {{count}} recordings?",
+      "confirmMessage": "This permanently removes the selected entries and any remaining local recording files. Entries whose files were already removed in Finder will also be removed. Copies uploaded to Drive are kept. This cannot be undone.",
+      "confirmDelete": "Delete recordings",
+      "deleting": "Deleting…",
+      "deleted_one": "Deleted {{count}} recording.",
+      "deleted_other": "Deleted {{count}} recordings.",
+      "failed_one": "Could not delete {{count}} recording. It remains selected for retry. {{error}}",
+      "failed_other": "Could not delete {{count}} recordings. They remain selected for retry. {{error}}"
+    },
     "fallbackTitle": "Recording",
     "copyButton": {
       "copied": "Copied",

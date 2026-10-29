@@ -28,6 +28,7 @@ type Props = {
   /** Override the default action (open the detail slide-over). */
   onOpen?: (rec: RecordingRow) => void;
   variant?: "card" | "ledger";
+  selection?: { checked: boolean; onToggle: () => void };
 };
 
 /** Recording row for the unified activity feed. Clicking slides in the detail
@@ -38,11 +39,13 @@ export default function RecordingCard({
   projects,
   onOpen,
   variant = "card",
+  selection,
 }: Props) {
   const { t } = useTranslation();
   const project = rec.project_id ? projects?.get(rec.project_id) : null;
   const { openRecording } = useActivityPanel();
   const handleClick = () => {
+    if (selection) { selection.onToggle(); return; }
     if (onOpen) onOpen(rec);
     else openRecording(rec.id);
   };
@@ -54,16 +57,22 @@ export default function RecordingCard({
         ledger
           ? "activity-ledger-row px-2 py-3"
           : "material-feed-card rounded-xl border border-line px-3.5 py-3 hover:border-line-strong"
-      }`}
+      } ${selection?.checked ? "bg-accent-soft" : ""}`}
     >
       {/* Primary action: full-card overlay button. The actions menu sits
           above it (relative z-10) so it stays independently clickable. */}
       <button
         type="button"
         onClick={handleClick}
+        aria-pressed={selection?.checked}
         className="absolute inset-0 cursor-pointer rounded-lg"
-        aria-label={t("recordingCard.openRecording", { name: recordingDisplayName(rec) })}
+        aria-label={selection ? t("main:recordings.selection.toggle", { name: recordingDisplayName(rec) }) : t("recordingCard.openRecording", { name: recordingDisplayName(rec) })}
       />
+      {selection ? (
+        <input type="checkbox" checked={selection.checked} onChange={selection.onToggle}
+          aria-label={t("main:recordings.selection.toggle", { name: recordingDisplayName(rec) })}
+          className="relative z-10 h-4 w-4 shrink-0 cursor-pointer accent-accent" />
+      ) : null}
       <div className={`recording-thumb relative shrink-0 overflow-hidden rounded bg-elevated ${ledger ? "h-8 w-8" : "h-12 w-20"}`}>
         {rec.thumb_path ? (
           <img
@@ -123,9 +132,9 @@ export default function RecordingCard({
         </div>
       </div>
 
-      <div className="relative z-10">
+      {!selection ? <div className="relative z-10">
         <RecordingActionsMenu rec={rec} />
-      </div>
+      </div> : null}
     </div>
   );
 }

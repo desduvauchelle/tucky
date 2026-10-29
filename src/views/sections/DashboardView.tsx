@@ -31,6 +31,7 @@ import {
 import { useToasts } from "../../components/ToastProvider";
 import Menu from "../../components/a11y/Menu";
 import ActivityLedgerEntry from "../../components/ActivityLedgerEntry";
+import RecordingSelectionToolbar from "../../components/RecordingSelectionToolbar";
 import { useTaskIndex } from "../../lib/useTaskIndex";
 import { STATS_CATEGORIES } from "../../components/StatsCategoryTabs";
 import SectionHeader from "../../components/SectionHeader";
@@ -142,6 +143,7 @@ export default function DashboardView({ projects, onOpenStats, searchRequest = 0
   const [loadingMore, setLoadingMore] = useState(false);
   const [kindFilter, setKindFilter] = useState<KindFilter>(initialFilter ?? "all");
   const [error, setError] = useState<string | null>(null);
+  const [recordingSelection, setRecordingSelection] = useState<Set<string> | null>(null);
 
   const [searchOpen, setSearchOpen] = useState(searchRequest > 0);
   const [query, setQuery] = useState("");
@@ -186,7 +188,7 @@ export default function DashboardView({ projects, onOpenStats, searchRequest = 0
   }, [refreshTagStatus]);
   const { push: pushToast } = useToasts();
 
-  const { refreshTick, selectedItemId, selectedRecordingId } = useActivityPanel();
+  const { refreshTick, selectedItemId, selectedRecordingId, close: closePanel, bumpRefresh } = useActivityPanel();
   const { tasks: taskIndex, reload: reloadTaskIndex } = useTaskIndex();
 
   // Current kind filter, read inside callbacks (event listeners, refetch) so
@@ -350,6 +352,10 @@ export default function DashboardView({ projects, onOpenStats, searchRequest = 0
   const isTasks = kindFilter === "task";
   const isRecordings = kindFilter === "recording";
   const isMeetings = kindFilter === "meeting";
+  // Selection always belongs to the current visible recording list.
+  useEffect(() => {
+    setRecordingSelection(null);
+  }, [kindFilter, query.trim(), searchOpen]);
   const statsCategory = statsCategoryForFilter(kindFilter);
 
   // Meetings keyed by their item id, so a meeting-kind search hit can be
@@ -400,6 +406,15 @@ export default function DashboardView({ projects, onOpenStats, searchRequest = 0
       projects={projects}
       tasks={taskIndex}
       onTaskChanged={() => void reloadTaskIndex()}
+      recordingSelection={isRecordings && recordingSelection !== null && entry.type === "recording" ? {
+        checked: recordingSelection.has(entry.rec.id),
+        onToggle: () => setRecordingSelection((current) => {
+          const next = new Set(current);
+          if (next.has(entry.rec.id)) next.delete(entry.rec.id);
+          else next.add(entry.rec.id);
+          return next;
+        }),
+      } : undefined}
     />
   );
 
@@ -684,6 +699,18 @@ export default function DashboardView({ projects, onOpenStats, searchRequest = 0
           ) : null}
 
           <KindFilterBar value={kindFilter} onChange={setKindFilter} />
+          {isRecordings ? (
+            <RecordingSelectionToolbar
+              recordings={isSearching ? recordings.filter((row) => recordingMatches(row, query)) : recordings}
+              selection={recordingSelection}
+              onChange={setRecordingSelection}
+              onDeleted={(ids) => {
+                setRecordings((current) => current.filter((row) => !ids.has(row.id)));
+                if (selectedRecordingId && ids.has(selectedRecordingId)) closePanel();
+                bumpRefresh();
+              }}
+            />
+          ) : null}
 
         {isTasks ? (
           <div className="py-3">
