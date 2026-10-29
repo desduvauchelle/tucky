@@ -3361,35 +3361,11 @@ pub async fn chat_with_memory(
         out
     };
 
-    let temporal_note = if date_window.is_some() && sources.is_empty() {
-        " No captures were found for the requested time period — do not guess or invent content."
-    } else {
-        ""
-    };
-
-    let system = if sources.is_empty() {
-        format!(
-            "You are a helpful assistant built into Tucky, a voice note and task capture app. \
-             Today is {today_str}. \
-             No relevant notes were found for this question.{temporal_note} \
-             Do not invent or fabricate any captures or activities. \
-             If the user is asking what they did or said, tell them no matching captures were found."
-        )
-    } else {
-        let context_lines: Vec<String> = chunks
-            .iter()
-            .map(|c| format!("[{}] ({}): {}", c.date, c.kind, c.content))
-            .collect();
-        format!(
-            "You are a helpful assistant built into Tucky. \
-             Today is {today_str}. \
-             Here are the user's relevant notes and captures:\n\n---\n{}\n---\n\n\
-             Answer based only on these notes. \
-             Do not invent or add content beyond what is shown above. \
-             If the notes don't address the question, say so explicitly.",
-            context_lines.join("\n")
-        )
-    };
+    let system = crate::llm::prompt::build_memory_chat_system_prompt(
+        today_str,
+        &chunks,
+        date_window.is_some(),
+    );
 
     let req = GenerateRequest {
         system: Some(system),

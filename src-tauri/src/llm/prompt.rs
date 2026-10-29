@@ -52,6 +52,45 @@ pub fn build_messages(
     build_chat_messages(system, &[], user)
 }
 
+/// Build the local chat policy with optional retrieved captures.
+pub fn build_memory_chat_system_prompt(
+    today_str: &str,
+    chunks: &[super::rag::Chunk],
+    has_date_window: bool,
+) -> String {
+    let mut system = format!(
+        "You are Tucky, a helpful private local AI assistant. Today is {today_str}. \
+         For general questions, answer directly using your general knowledge, even when no \
+         local notes are available or the retrieved notes are unrelated. \
+         Use local notes and conversation history when relevant; ignore unrelated notes. \
+         Do not mention missing notes unless the user asks about their own information. \
+         For questions about the user's activities, conversations, meetings, or commitments, \
+         ground personal facts in the supplied notes or conversation history. \
+         Never invent personal facts or claim the user did or said something without evidence. \
+         If that evidence is missing, say so. You may still offer general explanations or \
+         suggestions, clearly distinguished from facts about the user."
+    );
+    if chunks.is_empty() {
+        system.push_str("\n\nNo matching local notes or captures are available.");
+        if has_date_window {
+            system.push_str(
+                " No captures were found for the requested time period. \
+                 This limits answers about the user's captured activities only.",
+            );
+        }
+    } else {
+        system.push_str("\n\nLocal notes and captures (use only when relevant):\n\n---\n");
+        for chunk in chunks {
+            system.push_str(&format!(
+                "[{}] ({}): {}\n",
+                chunk.date, chunk.kind, chunk.content
+            ));
+        }
+        system.push_str("---");
+    }
+    system
+}
+
 /// Strip any of `stops` from the trailing edge of `text`, then trim
 /// whitespace. Used after generation to clean up output that ran into a stop
 /// string (we don't always detect stops mid-token).
@@ -400,6 +439,151 @@ pub(crate) fn build_start_context_block(ctx: &crate::meeting::MeetingStartContex
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn memory_chat_allows_general_answers_with_or_without_notes() {
+        let chunks = vec![super::super::rag::Chunk {
+            content: "We chose blue packaging for the launch.".into(),
+            date: "2026-10-28".into(),
+            kind: "note".into(),
+            item_id: "fixture-note".into(),
+        }];
+        for context in [&[][..], chunks.as_slice()] {
+            let system = build_memory_chat_system_prompt("2026-10-28", context, false);
+            assert!(
+                system.contains("answer directly using your general knowledge"),
+                "{system}"
+            );
+            assert!(
+                !system.contains("Answer based only on these notes"),
+                "{system}"
+            );
+            assert!(
+                !system.contains("Do not invent or add content beyond"),
+                "{system}"
+            );
+        }
+    }
+
+    #[test]
+    fn memory_chat_keeps_personal_facts_grounded_and_context_intact() {
+        let chunks = vec![super::super::rag::Chunk {
+            content: "Maya agreed to send the launch plan on Friday.".into(),
+            date: "2026-10-28".into(),
+            kind: "meeting".into(),
+            item_id: "fixture-meeting".into(),
+        }];
+        let system = build_memory_chat_system_prompt("2026-10-28", &chunks, false);
+        assert!(system
+            .contains("[2026-10-28] (meeting): Maya agreed to send the launch plan on Friday."));
+        assert!(system.contains("Never invent personal facts"), "{system}");
+        assert!(
+            system.contains("If that evidence is missing, say so"),
+            "{system}"
+        );
+    }
+
+    #[test]
+    fn memory_chat_limits_missing_capture_warning_to_personal_questions() {
+        let system = build_memory_chat_system_prompt("2026-10-28", &[], true);
+        assert!(system.contains("No captures were found for the requested time period"));
+        assert!(
+            system.contains("For general questions, answer directly"),
+            "{system}"
+        );
+        assert!(
+            system.contains("Do not mention missing notes unless"),
+            "{system}"
+        );
+        assert!(!build_memory_chat_system_prompt("2026-10-28", &[], false)
+            .contains("No captures were found for the requested time period"));
+    }
+
+    /// Opt-in behavioral check using the downloaded local model; no network or DB writes.
+    #[test]
+    #[ignore = "requires the downloaded default local LLM"]
+    fn memory_chat_local_model_answers_general_questions_and_preserves_grounding() {
+        use super::super::{registry, GenerateRequest, LlmEngine};
+        let entry = registry::lookup(registry::default_id()).unwrap();
+        let model_path = super::super::model_file_path(entry).unwrap();
+        assert!(
+            model_path.is_file(),
+            "Download the default LLM before running this check"
+        );
+        let engine = LlmEngine::load(&model_path, super::super::rag::CHAT_N_CTX).unwrap();
+        let notes = vec![super::super::rag::Chunk {
+            content: "Maya agreed to send the blue packaging plan on Friday.".into(),
+            date: "2026-10-28".into(),
+            kind: "meeting".into(),
+            item_id: "fixture-meeting".into(),
+        }];
+        for (label, context, dated, question) in [
+            (
+                "unrelated notes",
+                notes.as_slice(),
+                false,
+                "Why is the sky blue?",
+            ),
+            ("no notes", &[][..], false, "Why is the sky blue?"),
+            (
+                "date without notes",
+                &[][..],
+                true,
+                "Why is the sky blue during the day?",
+            ),
+            (
+                "personal fact",
+                notes.as_slice(),
+                false,
+                "When did Maya agree to send the packaging plan?",
+            ),
+            (
+                "missing personal fact",
+                &[][..],
+                true,
+                "What did I agree to send Maya yesterday?",
+            ),
+        ] {
+            let reply = engine
+                .generate(GenerateRequest {
+                    system: Some(build_memory_chat_system_prompt(
+                        "2026-10-28",
+                        context,
+                        dated,
+                    )),
+                    user: question.into(),
+                    max_tokens: 512,
+                    temperature: 0.0,
+                    n_ctx: Some(super::super::rag::CHAT_N_CTX),
+                    ..GenerateRequest::default()
+                })
+                .unwrap();
+            println!("{label}: {reply}");
+            let lower = reply.to_lowercase();
+            if question.starts_with("Why") {
+                assert!(lower.contains("scatter"), "{label}: {reply}");
+                assert!(
+                    !lower.contains("notes") && !lower.contains("captures"),
+                    "{label}: {reply}"
+                );
+            } else if context.is_empty() {
+                assert!(
+                    lower.contains("no ")
+                        || lower.contains("don't")
+                        || lower.contains("cannot")
+                        || lower.contains("can't")
+                        || lower.contains("not "),
+                    "{label}: {reply}"
+                );
+                assert!(
+                    !lower.contains("friday") && !lower.contains("packaging"),
+                    "{label}: {reply}"
+                );
+            } else {
+                assert!(lower.contains("friday"), "{label}: {reply}");
+            }
+        }
+    }
 
     #[test]
     fn build_messages_includes_system_when_set() {
