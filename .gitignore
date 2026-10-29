@@ -99,3 +99,4 @@ prototypes/
 
 # Local browser inspection captures
 .playwright-cli/
+.playwright-mcp/

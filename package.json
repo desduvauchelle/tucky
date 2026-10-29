@@ -5,6 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
+		"build:pet-rive": "cd src/desktop-pet/rive/tucky-v2 && python3 gen_scene.py && PATH=\"$HOME/.rive/bin:$PATH\" rive . --once && cp build/tucky-v2.riv ../../../../public/rive/tucky-v2.riv",
 		"asr:setup": "bash scripts/build-asr-lab.sh",
 		"dev:asr": "bun run asr:setup && ECHO_SCRIBE_DATA_FOLDER=EchoScribeAsrLab ECHO_SCRIBE_BUNDLE_ID=com.echoscribe.asrlab bun run tauri dev --config scripts/asr-lab.conf.json",
 		"build": "tsc && bun --bun x vite build",
@@ -18,6 +19,7 @@
 	"dependencies": {
 		"@fontsource-variable/inter": "^5.2.8",
 		"@fontsource-variable/jetbrains-mono": "^5.2.8",
+		"@rive-app/react-canvas": "4.38.0",
 		"@tauri-apps/api": "^2",
 		"@tauri-apps/plugin-autostart": "^2",
 		"@tauri-apps/plugin-dialog": "^2.7.1",
