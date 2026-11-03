@@ -15,8 +15,12 @@ pub fn classify(raw: &str) -> Option<&'static str> {
 
     // Google Meet: meet.google.com/<3>-<4>-<3> (the meeting code format).
     if host == "meet.google.com" {
-        let p = path.trim_start_matches('/');
-        let first = p.split('/').next().unwrap_or("");
+        // Meet serves both `/<code>` and `/meet/<code>`.
+        let mut segs = path.split('/').filter(|s| !s.is_empty());
+        let mut first = segs.next().unwrap_or("");
+        if first == "meet" {
+            first = segs.next().unwrap_or("");
+        }
         if is_meet_code(first) {
             return Some("Google Meet");
         }
@@ -126,6 +130,20 @@ fn is_meet_code(s: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn google_meet_meet_prefix_path() {
+        assert_eq!(
+            classify("https://meet.google.com/meet/ydv-ewgg-evo"),
+            Some("Google Meet")
+        );
+        assert_eq!(
+            classify("https://meet.google.com/meet/ydv-ewgg-evo?authuser=1"),
+            Some("Google Meet")
+        );
+        assert_eq!(classify("https://meet.google.com/meet"), None);
+        assert_eq!(classify("https://meet.google.com/meet/landing"), None);
+    }
 
     #[test]
     fn google_meet_room_matches() {

@@ -258,6 +258,26 @@ fn browser_provider_name(url: Option<&str>) -> Option<&'static str> {
     crate::meeting::url_allowlist::classify(url?)
 }
 
+/// True when `raw`'s host is a known meeting host (used only for diagnostics
+/// when the URL allowlist rejects a page on such a host).
+fn is_known_meeting_host(raw: &str) -> bool {
+    let Ok(url) = url::Url::parse(raw) else {
+        return false;
+    };
+    let Some(host) = url.host_str().map(|h| h.to_ascii_lowercase()) else {
+        return false;
+    };
+    host == "meet.google.com"
+        || host == "zoom.us"
+        || host.ends_with(".zoom.us")
+        || host == "teams.microsoft.com"
+        || host == "teams.cloud.microsoft"
+        || host == "teams.live.com"
+        || host == "app.slack.com"
+        || host == "whereby.com"
+        || host == "huddle01.app"
+}
+
 /// Spawns the detection loop. Returns immediately; the loop runs until process exit.
 pub fn spawn(manager: Arc<MeetingManager>, settings: SettingsStore, app_handle: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
@@ -270,6 +290,7 @@ pub fn spawn(manager: Arc<MeetingManager>, settings: SettingsStore, app_handle: 
         let mut prev_title_ok: bool = false;
         let mut prev_mic_active: bool = false;
         let mut prev_browser_provider: Option<&'static str> = None;
+        let mut last_unmatched_url: Option<String> = None;
         let mut prev_gate_blocked: Option<&'static str> = None; // "active" | "cooldown" | None
         let mut suppression_ticker = AutoStartSuppressionTicker::new();
         let mut tracked_suppression: Option<MeetingDetectionKey> = None;
@@ -438,6 +459,19 @@ pub fn spawn(manager: Arc<MeetingManager>, settings: SettingsStore, app_handle: 
                         provider.to_string()
                     }
                     None => {
+                        if let Some(u) = cand.browser_url.as_deref() {
+                            if is_known_meeting_host(u)
+                                && last_unmatched_url.as_deref() != Some(u)
+                            {
+                                info!(
+                                    target: "meeting_detect",
+                                    app = %cand.bundle_id,
+                                    url = %u,
+                                    "browser on meeting host but URL did not match allowlist"
+                                );
+                                last_unmatched_url = Some(u.to_string());
+                            }
+                        }
                         if prev_browser_provider.is_some() {
                             info!(
                                 target: "meeting_detect",
