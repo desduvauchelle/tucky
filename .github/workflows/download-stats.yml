@@ -16,9 +16,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Record unified download total
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          total=$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
-            | jq '[.[].assets[] | select(.name | endswith(".tar.gz") or endswith(".exe")) | .download_count] | add // 0')
+          total=$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            | python3 scripts/count-downloads.py)
           echo "Current total: $total"
 
           mkdir -p stats

@@ -43,7 +43,8 @@ The app lives in your menu bar. The main window gives you a feed of everything c
 
 - Dictation audio is processed in memory; meeting and screen recordings are saved only on your Mac, in `~/Library/Application Support/EchoScribe/`
 - All AI inference runs locally (Parakeet + Gemma 4 via llama.cpp with Metal GPU offload)
-- No telemetry, no analytics, no cloud sync
+- No usage tracking or cloud sync. Optional installation counting sends a single first-launch event only when you explicitly choose it; the payload contains only the app version and platform. Builds without a configured counting service send nothing.
+- Installation counting includes no device identifier, recordings, transcripts, or usage history. See [installation counting and privacy](docs/installation-counting.md) for details and limitations.
 - SQLite database lives in the same folder — your data, your machine
 - Models are downloaded once and cached locally; no internet needed after that
 

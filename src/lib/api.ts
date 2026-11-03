@@ -2192,3 +2192,7 @@ export const setLowMemoryMode = (enabled: boolean): Promise<void> =>
 export type VoiceWorkflow = { id: string; phrase: string; url: string; enabled: boolean };
 export const getVoiceWorkflows = () => invoke<VoiceWorkflow[]>("get_voice_workflows");
 export const setVoiceWorkflows = (workflows: VoiceWorkflow[]) => invoke<void>("set_voice_workflows", { workflows });
+
+export type AdoptionStatus = { available: boolean; choice: string };
+export const adoptionStatus = (): Promise<AdoptionStatus> => invoke("adoption_status");
+export const adoptionChoose = (count: boolean): Promise<void> => invoke("adoption_choose", { count });

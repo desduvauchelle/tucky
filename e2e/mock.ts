@@ -16,6 +16,9 @@ export type Scenario = {
   memorySaveError?: boolean;
   wakeWordSaveError?: boolean;
   onboardingCompleted?: boolean;
+  adoptionAvailable?: boolean;
+  adoptionChoice?: string;
+  adoptionError?: string;
   /** Speech model already downloaded + active (the Start gate). */
   speechModelReady?: boolean;
   /** LLM already downloaded + active (suppresses the "AI features are off" card). */
@@ -98,6 +101,7 @@ export async function installTauriMock(page: Page, scenario: Scenario = {}) {
       lowMemoryMode: sc.lowMemoryMode ?? false,
       wakeStatus: { enabled: false, state: "off", message: "Wake word is off" },
       onboardingCompleted: sc.onboardingCompleted ?? false,
+      adoptionChoice: sessionStorage.getItem("test-adoption-choice") ?? sc.adoptionChoice ?? "pending",
       speechModelReady: sc.speechModelReady ?? false,
       llmReady: sc.llmReady ?? false,
       captureCounts: sc.captureCounts,
@@ -219,6 +223,12 @@ export async function installTauriMock(page: Page, scenario: Scenario = {}) {
         screen_recording: true,
         bundle_self_update: true,
       }),
+      adoption_status: () => ({ available: sc.adoptionAvailable ?? false, choice: state.adoptionChoice }),
+      adoption_choose: (a) => {
+        state.adoptionChoice = a.count ? "attempted" : "declined";
+        sessionStorage.setItem("test-adoption-choice", state.adoptionChoice);
+        if (sc.adoptionError) throw new Error(sc.adoptionError);
+      },
       get_onboarding_completed: () => state.onboardingCompleted,
       set_onboarding_completed: (a) => {
         state.onboardingCompleted = !!a.completed;

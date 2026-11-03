@@ -80,5 +80,19 @@
     "copied": "Copied",
     "copyAriaLabel": "Copy {{title}} setup",
     "skipHint": "You can do this anytime from Settings → Coding Agents."
+  },
+  "installationCount": {
+    "title": "Help count Tucky installations (optional)",
+    "body": "If you choose to be counted, Tucky sends one first-launch event with only its version and platform. No recordings, transcripts, usage history, or device identifier are included. The counting service sees your connection’s IP address but is configured not to retain it. A flag stays on this Mac to prevent another report.",
+    "count": "Count this installation",
+    "skip": "Don’t send",
+    "sending": "Sending…",
+    "sent": "Your installation was counted. No further reports will be sent.",
+    "declined": "Your choice is saved. Nothing was sent.",
+    "saved": "Your choice is saved. No further reports will be sent.",
+    "unavailable": "Counting is not enabled in this build. Nothing is sent.",
+    "optional": "Nothing is sent unless you choose “Count this installation”. You can continue setup without choosing.",
+    "loading": "Checking local counting status…",
+    "loadError": "Could not read the local counting preference. Nothing was sent. You can continue setup."
   }
 }

@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import SpeechSetupStatus from "../components/SpeechSetupStatus";
 import { useSpeechSetup } from "../lib/speechSetup";
 import OnboardingMcpCard from "../components/OnboardingMcpCard";
+import InstallationCount from "../components/InstallationCount";
 import PermissionRow from "../components/PermissionRow";
 import {
   openAccessibilitySettings,
@@ -279,6 +280,8 @@ export default function Onboarding({ initialStatus, onStarted, resumeNotice }: P
 
           <OnboardingMcpCard />
         </div>
+
+        <InstallationCount />
 
         <button
           type="button"

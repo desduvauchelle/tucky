@@ -35,6 +35,7 @@ pub mod project_tagger;
 mod project_tagger_control;
 pub mod recording_feedback;
 pub mod screenrec;
+pub mod adoption;
 pub mod settings;
 pub mod smoke;
 pub(crate) mod temporal;
@@ -270,6 +271,8 @@ pub fn run() {
         })
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
+            adoption::adoption_status,
+            adoption::adoption_choose,
             asr_lab::asr_lab_status,
             asr_lab::asr_lab_download,
             asr_lab::asr_lab_run,

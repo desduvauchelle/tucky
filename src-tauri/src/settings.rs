@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use rdev::Key;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 use tauri_plugin_store::{Store, StoreExt};
 use thiserror::Error;
 use tracing::warn;
@@ -224,9 +224,22 @@ pub struct SettingsStore {
 impl SettingsStore {
     /// Open (or create) the settings store.
     pub fn load(app: &AppHandle) -> Result<Self, SettingsError> {
+        // Capture eligibility before any migration writes defaults. Upgrades must not
+        // inflate new-install totals, including users who re-run onboarding.
+        let existing_store = app.path().app_data_dir()
+            .map(|path| path.join(STORE_FILENAME).exists()).unwrap_or(true);
         let store = app
             .store(STORE_FILENAME)
             .map_err(|e| SettingsError::Store(e.to_string()))?;
+        if store.get("adoption_choice_v1").is_none() {
+            let choice = crate::adoption::initial_choice(existing_store, store.length(), crate::is_primary_install());
+            store.set("adoption_choice_v1", serde_json::json!(choice));
+            if let Err(error) = store.save() {
+                // Optional measurement must never stop the app from launching.
+                warn!(target: "adoption", ?error, "could not initialize local counting preference; counting disabled");
+                store.set("adoption_choice_v1", serde_json::json!("ineligible"));
+            }
+        }
         let settings = Self { store };
         if let Err(error) = settings.migrate_tucky_trigger_word() {
             warn!(?error, "failed to migrate the action trigger word to Tucky");
@@ -576,6 +589,17 @@ impl SettingsStore {
             .save()
             .map_err(|e| SettingsError::Store(e.to_string()))?;
         Ok(())
+    }
+
+    pub fn adoption_choice(&self) -> String {
+        self.store.get("adoption_choice_v1")
+            .and_then(|value| value.as_str().map(str::to_owned))
+            .unwrap_or_else(|| "ineligible".to_owned())
+    }
+
+    pub fn set_adoption_choice(&self, choice: &str) -> Result<(), SettingsError> {
+        self.store.set("adoption_choice_v1", serde_json::json!(choice));
+        self.store.save().map_err(|e| SettingsError::Store(e.to_string()))
     }
 
     /// Whether the user has completed the onboarding flow at least once.
