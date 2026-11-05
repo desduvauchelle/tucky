@@ -1,0 +1,75 @@
+{
+ "hook": {
+  "text": "Every voice-typing app, in one meeting",
+  "caption": "Pitch meeting: who gets to turn my voice into text?"
+ },
+ "voices": {
+  "FOUNDER": {
+   "speed": 1.0,
+   "description": "Smooth, confident, slightly too pleased with himself. Polished startup-pitch cadence, a hint of smugness."
+  },
+  "BUILTIN": {
+   "speed": 0.85,
+   "description": "Flat, crackly, slow. Old dial-up-modem-era voice, tired and tinny, like a 1990s answering machine."
+  },
+  "SALES": {
+   "speed": 1.15,
+   "description": "Fast, bright, over-eager used-car-salesman energy. Relentlessly upbeat, talking just a bit too quickly."
+  },
+  "TUCKY": {
+   "speed": 0.9,
+   "description": "Warm, calm, gentle and unhurried. Friendly and reassuring, a smile in the voice."
+  }
+ },
+ "elevenlabs": {
+  "model_id": "eleven_multilingual_v2",
+  "voices": {
+   "FOUNDER": {
+    "name": "Daniel",
+    "voice_id": "onwK4e9ZLuTAKqWW03F9",
+    "stability": 0.6,
+    "style": 0.3,
+    "speed": 1.0
+   },
+   "BUILTIN": {
+    "name": "Arnold",
+    "voice_id": "VR6AewLTigWG4xSOukaG",
+    "stability": 0.9,
+    "style": 0.0,
+    "speed": 0.85
+   },
+   "SALES": {
+    "name": "Josh",
+    "voice_id": "TxGEqnHWrfWFTfGW9XjX",
+    "stability": 0.4,
+    "style": 0.5,
+    "speed": 1.15
+   },
+   "TUCKY": {
+    "name": "Antoni",
+    "voice_id": "ErXwobaYiN019PkySvjV",
+    "stability": 0.6,
+    "style": 0.4,
+    "speed": 0.9
+   }
+  }
+ },
+ "shots": [
+  {"id": "01", "who": "FOUNDER", "text": "We turn your voice into text. Fifteen dollars a month."},
+  {"id": "02", "who": "TUCKY", "text": "To… talk?"},
+  {"id": "03", "who": "FOUNDER", "text": "Your audio goes to our servers and comes back smarter."},
+  {"id": "04", "who": "TUCKY", "text": "Comes back from where?"},
+  {"id": "05", "who": "FOUNDER", "text": "Virginia.", "reactionCut": true},
+  {"id": "06", "who": "BUILTIN", "text": "I'm free. Say something."},
+  {"id": "07", "who": "TUCKY", "text": "“Ship the fix before standup.”"},
+  {"id": "08", "who": "BUILTIN", "text": "“Sheep the fish. Sand up.” Sent.", "beat": "typo"},
+  {"id": "09", "who": "SALES", "text": "Ours runs on YOUR Mac. Private. Fast."},
+  {"id": "10", "who": "TUCKY", "text": "Love it. Price?"},
+  {"id": "11", "who": "SALES", "text": "Ten a month."},
+  {"id": "12", "who": "TUCKY", "text": "For a model… on my Mac."},
+  {"id": "13", "who": "SALES", "text": "It's a relationship.", "reactionCut": true},
+  {"id": "14", "who": "TUCKY", "text": "Hold a key. Talk. The ums vanish. Nothing leaves the Mac. Free.", "beat": "dictate"},
+  {"id": "15", "who": "SALES", "text": "That's not a business model."},
+  {"id": "16", "who": "TUCKY", "text": "No. It's a squirrel.", "hold": 30}
+ ]
+}

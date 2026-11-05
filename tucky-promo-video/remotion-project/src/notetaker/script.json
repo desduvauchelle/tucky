@@ -1,0 +1,78 @@
+{
+ "hook": {
+  "text": "POV: a bot joins your 1:1",
+  "toast": "Notetaker.ai has joined the meeting"
+ },
+ "voices": {
+  "BOT": {
+   "speed": 1.12,
+   "description": "Flat, monotone, robotic corporate AI voice. No emotion at all, clipped and mechanical, slightly too fast."
+  },
+  "SAM": {
+   "speed": 0.95,
+   "description": "Tired, flat, deadpan. Low energy, a little mumbly, like a long Monday afternoon with no coffee left."
+  },
+  "LEGAL": {
+   "speed": 1.0,
+   "description": "Clipped, stern, formal lawyer. Precise diction, authoritative and cold, no warmth."
+  },
+  "TUCKY": {
+   "speed": 0.9,
+   "description": "Warm, calm, gentle and unhurried. Friendly and reassuring, a smile in the voice."
+  }
+ },
+ "elevenlabs": {
+  "model_id": "eleven_multilingual_v2",
+  "voices": {
+   "BOT": {
+    "name": "Adam",
+    "voice_id": "pNInz6obpgDQGcFmaJgB",
+    "stability": 0.9,
+    "similarity_boost": 0.75,
+    "style": 0.0,
+    "speed": 1.12
+   },
+   "SAM": {
+    "name": "Josh",
+    "voice_id": "TxGEqnHWrfWFTfGW9XjX",
+    "stability": 0.5,
+    "similarity_boost": 0.75,
+    "style": 0.2,
+    "speed": 0.95
+   },
+   "LEGAL": {
+    "name": "Rachel",
+    "voice_id": "21m00Tcm4TlvDq8ikWAM",
+    "stability": 0.7,
+    "similarity_boost": 0.75,
+    "style": 0.3,
+    "speed": 1.0
+   },
+   "TUCKY": {
+    "name": "Antoni",
+    "voice_id": "ErXwobaYiN019PkySvjV",
+    "stability": 0.6,
+    "similarity_boost": 0.75,
+    "style": 0.4,
+    "speed": 0.9
+   }
+  }
+ },
+ "shots": [
+  {"id": "01", "who": "SAM", "text": "Who invited you?"},
+  {"id": "02", "who": "BOT", "text": "Nobody. I invite myself."},
+  {"id": "03", "who": "SAM", "text": "Can you leave?"},
+  {"id": "04", "who": "BOT", "text": "I can mute myself. I won't.", "hold": 15},
+  {"id": "05", "who": "LEGAL", "text": "Did everyone consent to being recorded?", "slam": true},
+  {"id": "06", "who": "BOT", "text": "I consented for them."},
+  {"id": "07", "who": "LEGAL", "text": "That's not how—"},
+  {"id": "08", "who": "BOT", "text": "Also I have your voiceprint now. It's cute.", "reactionCut": true},
+  {"id": "09", "who": "SAM", "text": "Where does the recording go?"},
+  {"id": "10", "who": "BOT", "text": "The cloud. Then “partners”.", "reactionCut": true},
+  {"id": "11", "who": "SAM", "text": "…and you?"},
+  {"id": "12", "who": "TUCKY", "text": "I'm already on your Mac. Nothing leaves."},
+  {"id": "13", "who": "BOT", "text": "That's not scalable."},
+  {"id": "14", "who": "TUCKY", "text": "It's free."},
+  {"id": "15", "who": "BOT", "text": "…that's worse.", "glassesOff": true, "hold": 30}
+ ]
+}
