@@ -2,6 +2,12 @@
 
 **Free, private voice to text for your whole Mac.** Press a hotkey, speak, and clean text appears wherever your cursor is: ChatGPT, Claude, Cursor, Slack, Gmail, VS Code. Speech recognition and the AI that tidies your words both run on your Mac. No account, no subscription, no cloud.
 
+**A free, open source alternative to Wispr Flow, Superwhisper and Granola.**
+
+<!-- DEMO GIF PLACEHOLDER: record a 5 to 10 second screen capture (press the hotkey, speak, clean text lands in an app),
+     export it as docs/demo.gif (under ~5 MB, about 800px wide), then replace this comment with:
+     ![Tucky demo: press a hotkey, speak, clean text appears](docs/demo.gif) -->
+
 **[tucky.ai-juicing.com →](https://tucky.ai-juicing.com)**
 
 **[Download Tucky for Mac](https://github.com/desduvauchelle/tucky/releases/latest/download/Tucky-arm64.dmg)**
@@ -148,3 +154,7 @@ to `/Applications` and launches it.
 The desktop executable can also run a read-only MCP server, exposing curated
 tools for meetings, captures, projects, tasks, Recipes, people, and companies.
 See [docs/MCP.md](docs/MCP.md) for client configuration and the privacy model.
+
+## License
+
+[MIT](LICENSE)
